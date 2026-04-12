@@ -60,6 +60,16 @@
             </label>
 
             <label class="text-field">
+              <span>Track name for pasted text</span>
+              <input
+                id="title-input"
+                name="title"
+                type="text"
+                placeholder="Optional. If blank, we will name it from the opening words."
+              />
+            </label>
+
+            <label class="text-field">
               <span>Paste text</span>
               <textarea
                 id="text-input"
@@ -77,11 +87,11 @@
 
         <section class="panel jobs-panel">
           <div class="panel-header">
-            <h2>Processing Queue</h2>
+            <h2>Your Library</h2>
             <p id="job-count">0 jobs</p>
           </div>
           <div id="job-list" class="job-list">
-            <div class="empty-state">No tracks yet. Submit text to start a job.</div>
+            <div class="empty-state">No tracks yet. Submit text to start building your library.</div>
           </div>
         </section>
       </section>

@@ -142,12 +142,14 @@ body {
 
 .voice-picker select,
 .text-field textarea,
+.text-field input,
 .timeline-wrap input[type="range"] {
   font: inherit;
 }
 
 .voice-picker select,
-.text-field textarea {
+.text-field textarea,
+.text-field input {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -213,6 +215,11 @@ body {
   min-height: 240px;
   resize: vertical;
   line-height: 1.65;
+}
+
+.text-field input:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .actions,

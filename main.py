@@ -29,6 +29,7 @@ DATA_DIR = BASE_DIR / "data"
 UPLOADS_DIR = DATA_DIR / "uploads"
 AUDIO_DIR = DATA_DIR / "audio"
 TRANSCRIPTS_DIR = DATA_DIR / "transcripts"
+JOBS_DIR = DATA_DIR / "jobs"
 MODELS_DIR = BASE_DIR / "models"
 MAX_FILE_SIZE = 5 * 1024 * 1024
 CHUNK_LIMIT = 350
@@ -80,7 +81,7 @@ VOICE_CATALOG: dict[str, dict[str, str]] = {
 }
 DEFAULT_VOICE = "edge:en-US-EmmaMultilingualNeural"
 
-for directory in (STATIC_DIR, DATA_DIR, UPLOADS_DIR, AUDIO_DIR, TRANSCRIPTS_DIR, MODELS_DIR):
+for directory in (STATIC_DIR, DATA_DIR, UPLOADS_DIR, AUDIO_DIR, TRANSCRIPTS_DIR, JOBS_DIR, MODELS_DIR):
     directory.mkdir(parents=True, exist_ok=True)
 
 
@@ -112,6 +113,7 @@ class Job:
     transcript_path: str | None = None
     transcript_data_path: str | None = None
     audio_path: str | None = None
+    library_name: str | None = None
 
     def payload(self) -> dict[str, Any]:
         data = asdict(self)
@@ -198,6 +200,74 @@ def split_text(text: str, limit: int = CHUNK_LIMIT) -> list[str]:
     return chunks or [text]
 
 
+def tokenize_word_spans(text: str) -> list[dict[str, Any]]:
+    spans: list[dict[str, Any]] = []
+    for match in re.finditer(r"\b[\w']+\b", text):
+        spans.append({"text": match.group(0), "char_start": match.start(), "char_end": match.end()})
+    return spans
+
+
+def assign_word_timings_to_text(text: str, timings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    spans = tokenize_word_spans(text)
+    for span, timing in zip(spans, timings):
+        span["start_time"] = timing["start_time"]
+        span["end_time"] = timing["end_time"]
+    return spans
+
+
+def slugify(value: str) -> str:
+    value = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower())
+    value = re.sub(r"-{2,}", "-", value).strip("-")
+    return value or "untitled-track"
+
+
+def derive_paste_title(text: str) -> str:
+    words = re.findall(r"[A-Za-z0-9']+", text)
+    if not words:
+        return "Untitled Track"
+    short_title = " ".join(words[:6]).strip()
+    if len(words) > 6:
+        short_title += "..."
+    return short_title[:80]
+
+
+def unique_path(directory: Path, stem: str, suffix: str) -> Path:
+    candidate = directory / f"{stem}{suffix}"
+    counter = 2
+    while candidate.exists():
+        candidate = directory / f"{stem}-{counter}{suffix}"
+        counter += 1
+    return candidate
+
+
+def save_job_metadata(job: Job) -> None:
+    metadata_path = JOBS_DIR / f"{job.id}.json"
+    metadata_path.write_text(json.dumps(asdict(job), indent=2), encoding="utf-8")
+
+
+def restore_jobs_from_disk() -> None:
+    restored: dict[str, Job] = {}
+    for metadata_path in sorted(JOBS_DIR.glob("*.json")):
+        try:
+            payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+            job = Job(**payload)
+        except Exception:
+            continue
+
+        if job.audio_path and not Path(job.audio_path).exists():
+            job.state = "failed"
+            job.error = "Audio file missing from disk."
+        elif job.state in {"queued", "processing"}:
+            job.state = "failed"
+            job.error = "Processing was interrupted in a previous session."
+
+        restored[job.id] = job
+
+    with jobs_lock:
+        jobs.clear()
+        jobs.update(restored)
+
+
 def read_text_file(upload: UploadFile, content: bytes) -> str:
     suffix = Path(upload.filename or "").suffix.lower()
     if suffix not in {".txt", ".md", ".csv", ".log"}:
@@ -216,39 +286,13 @@ def set_job(job_id: str, **updates: Any) -> None:
         for key, value in updates.items():
             setattr(job, key, value)
         job.updated_at = time.time()
-
-
-def tokenize_word_spans(text: str) -> list[dict[str, Any]]:
-    spans: list[dict[str, Any]] = []
-    for match in re.finditer(r"\b[\w']+\b", text):
-        spans.append(
-            {
-                "text": match.group(0),
-                "char_start": match.start(),
-                "char_end": match.end(),
-            }
-        )
-    return spans
-
-
-def assign_word_timings_to_text(text: str, timings: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    spans = tokenize_word_spans(text)
-    for span, timing in zip(spans, timings):
-        span["start_time"] = timing["start_time"]
-        span["end_time"] = timing["end_time"]
-    return spans
+        save_job_metadata(job)
 
 
 def save_transcript_data(job_id: str, text: str, words: list[dict[str, Any]], timing_mode: str) -> Path:
     transcript_data_path = TRANSCRIPTS_DIR / f"{job_id}.json"
     transcript_data_path.write_text(
-        json.dumps(
-            {
-                "text": text,
-                "words": words,
-                "timing_mode": timing_mode,
-            }
-        ),
+        json.dumps({"text": text, "words": words, "timing_mode": timing_mode}),
         encoding="utf-8",
     )
     return transcript_data_path
@@ -256,10 +300,7 @@ def save_transcript_data(job_id: str, text: str, words: list[dict[str, Any]], ti
 
 def join_edge_audio(parts: list[Path], output_path: Path) -> None:
     concat_file = output_path.with_suffix(".txt")
-    concat_file.write_text(
-        "".join(f"file '{part.resolve().as_posix()}'\n" for part in parts),
-        encoding="utf-8",
-    )
+    concat_file.write_text("".join(f"file '{part.resolve().as_posix()}'\n" for part in parts), encoding="utf-8")
     try:
         subprocess.run(
             ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_file), "-c", "copy", str(output_path)],
@@ -276,16 +317,7 @@ def join_edge_audio(parts: list[Path], output_path: Path) -> None:
 
 def get_audio_duration(path: Path) -> float:
     result = subprocess.run(
-        [
-            "ffprobe",
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            str(path),
-        ],
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
         check=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -373,7 +405,7 @@ def synthesize_with_piper(
     duration_seconds = round(len(final_audio) / sample_rate, 2)
 
     timed_words: list[dict[str, Any]] = []
-    chunk_cursor = 0
+    chunk_cursor = 0.0
     spans = tokenize_word_spans(text)
     span_index = 0
     for info in chunk_infos:
@@ -415,16 +447,15 @@ def synthesize_job(job_id: str) -> None:
     set_job(job_id, state="processing", total_chunks=len(chunks), progress=0.02)
 
     output_ext = voice_config["format"]
-    output_path = AUDIO_DIR / f"{job_id}.{output_ext}"
+    library_name = job.library_name or slugify(job.title)
+    output_path = unique_path(AUDIO_DIR, library_name, f".{output_ext}") if not job.audio_path else Path(job.audio_path)
 
     if voice_config["provider"] == "edge":
         duration_seconds, words, timing_mode = asyncio.run(
             synthesize_with_edge_async(job_id, text, chunks, voice_config["voice_name"], output_path)
         )
     else:
-        duration_seconds, words, timing_mode = synthesize_with_piper(
-            job_id, text, chunks, voice_config["voice_name"], output_path
-        )
+        duration_seconds, words, timing_mode = synthesize_with_piper(job_id, text, chunks, voice_config["voice_name"], output_path)
 
     transcript_data_path = save_transcript_data(job_id, text, words, timing_mode)
     set_job(
@@ -439,6 +470,7 @@ def synthesize_job(job_id: str) -> None:
         timing_mode=timing_mode,
         transcript_data_path=str(transcript_data_path),
         audio_path=str(output_path),
+        library_name=output_path.stem,
     )
 
 
@@ -456,7 +488,8 @@ def worker() -> None:
 def queue_job(title: str, source_type: str, text: str, voice_id: str, filename: str | None) -> Job:
     voice_config = get_voice_config(voice_id)
     job_id = uuid.uuid4().hex
-    transcript_path = UPLOADS_DIR / f"{job_id}.txt"
+    safe_stem = slugify(title)
+    transcript_path = unique_path(UPLOADS_DIR, safe_stem, ".txt")
     transcript_path.write_text(text, encoding="utf-8")
     preview = text[:180].replace("\n", " ")
     job = Job(
@@ -474,9 +507,11 @@ def queue_job(title: str, source_type: str, text: str, voice_id: str, filename: 
         audio_format=voice_config["format"],
         preview=preview,
         transcript_path=str(transcript_path),
+        library_name=safe_stem,
     )
     with jobs_lock:
         jobs[job_id] = job
+        save_job_metadata(job)
     job_queue.put(job_id)
     return job
 
@@ -486,6 +521,7 @@ def startup() -> None:
     global worker_started
     ensure_piper_voice("en_US-ryan-high")
     ensure_piper_voice("en_US-lessac-medium")
+    restore_jobs_from_disk()
     if not worker_started:
         thread = threading.Thread(target=worker, daemon=True, name="tts-worker")
         thread.start()
@@ -546,7 +582,7 @@ def download_audio(job_id: str) -> FileResponse:
         if job is None or not job.audio_path or not job.audio_format:
             raise HTTPException(status_code=404, detail="Audio file not found.")
         audio_path = Path(job.audio_path)
-        title = re.sub(r"[^a-zA-Z0-9_-]+", "-", job.title).strip("-") or "tts-output"
+        title = slugify(job.title)
         extension = job.audio_format
 
     media_type = "audio/mpeg" if extension == "mp3" else "audio/wav"
@@ -556,6 +592,7 @@ def download_audio(job_id: str) -> FileResponse:
 @app.post("/api/jobs")
 async def create_job(
     text: str = Form(default=""),
+    title: str = Form(default=""),
     voice: str = Form(default=DEFAULT_VOICE),
     file: UploadFile | None = File(default=None),
 ) -> dict[str, Any]:
@@ -576,6 +613,10 @@ async def create_job(
     if not merged_text:
         raise HTTPException(status_code=400, detail="Paste text or upload a text file.")
 
-    title = filename or f"Paste {time.strftime('%H:%M:%S')}"
-    job = queue_job(title, source_type, merged_text, voice_id, filename)
+    if filename:
+        resolved_title = Path(filename).stem
+    else:
+        resolved_title = clean_text(title) or derive_paste_title(merged_text)
+
+    job = queue_job(resolved_title, source_type, merged_text, voice_id, filename)
     return {"job": job.payload()}

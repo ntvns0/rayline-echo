@@ -1,5 +1,6 @@
 const form = document.getElementById("tts-form");
 const fileInput = document.getElementById("file-input");
+const titleInput = document.getElementById("title-input");
 const textInput = document.getElementById("text-input");
 const clearButton = document.getElementById("clear-button");
 const dropzone = document.getElementById("dropzone");
@@ -44,6 +45,7 @@ function formatTime(totalSeconds) {
 function updateSelectedFileLabel() {
   const file = fileInput.files[0];
   selectedFile.textContent = file ? file.name : "No file selected";
+  titleInput.disabled = Boolean(file);
 }
 
 function renderVoices(voiceItems) {
@@ -83,7 +85,7 @@ function statusLabel(job) {
 function renderJobs() {
   jobCount.textContent = `${jobs.length} ${jobs.length === 1 ? "job" : "jobs"}`;
   if (!jobs.length) {
-    jobList.innerHTML = `<div class="empty-state">No tracks yet. Submit text to start a job.</div>`;
+    jobList.innerHTML = `<div class="empty-state">No tracks yet. Submit text to start building your library.</div>`;
     return;
   }
 
@@ -282,6 +284,7 @@ async function submitJob(event) {
 
   const payload = new FormData();
   payload.append("voice", voiceSelect.value);
+  payload.append("title", titleInput.value);
   payload.append("text", textInput.value);
   if (fileInput.files[0]) {
     payload.append("file", fileInput.files[0]);
@@ -298,6 +301,7 @@ async function submitJob(event) {
     return;
   }
 
+  titleInput.value = "";
   textInput.value = "";
   fileInput.value = "";
   updateSelectedFileLabel();
@@ -305,6 +309,7 @@ async function submitJob(event) {
 }
 
 function clearForm() {
+  titleInput.value = "";
   textInput.value = "";
   fileInput.value = "";
   updateSelectedFileLabel();
@@ -394,6 +399,7 @@ dropzone.addEventListener("drop", handleDrop);
 
 async function init() {
   await loadVoices();
+  updateSelectedFileLabel();
   await loadJobs();
   setInterval(loadJobs, 1500);
 }
