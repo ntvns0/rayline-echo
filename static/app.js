@@ -24,6 +24,12 @@ const playerSubtitle = document.getElementById("player-subtitle");
 const downloadLink = document.getElementById("download-link");
 const transcriptViewer = document.getElementById("transcript-viewer");
 const readerMode = document.getElementById("reader-mode");
+const syncOffsetInput = document.getElementById("sync-offset");
+const syncOffsetValue = document.getElementById("sync-offset-value");
+const syncEarlierButton = document.getElementById("sync-earlier");
+const syncLaterButton = document.getElementById("sync-later");
+const syncResetButton = document.getElementById("sync-reset");
+const followPlaybackInput = document.getElementById("follow-playback");
 
 let jobs = [];
 let selectedJobId = null;
@@ -31,6 +37,11 @@ let availableVoices = [];
 let transcriptData = null;
 let activeWordIndex = -1;
 let loadedTranscriptJobId = null;
+let transcriptOffsetSeconds = 0;
+
+function transcriptStorageKey(jobId) {
+  return `tts-sync-offset:${jobId}`;
+}
 
 function formatTime(totalSeconds) {
   if (!Number.isFinite(totalSeconds)) {
@@ -40,6 +51,30 @@ function formatTime(totalSeconds) {
   const minutes = Math.floor(seconds / 60);
   const remaining = String(seconds % 60).padStart(2, "0");
   return `${minutes}:${remaining}`;
+}
+
+function formatOffset(seconds) {
+  const sign = seconds > 0 ? "+" : "";
+  return `${sign}${seconds.toFixed(2)}s`;
+}
+
+function setTranscriptOffset(value, { persist = true } = {}) {
+  transcriptOffsetSeconds = Number(value);
+  syncOffsetInput.value = String(transcriptOffsetSeconds);
+  syncOffsetValue.textContent = formatOffset(transcriptOffsetSeconds);
+  if (persist && selectedJobId) {
+    window.localStorage.setItem(transcriptStorageKey(selectedJobId), String(transcriptOffsetSeconds));
+  }
+  updateTranscriptForCurrentTime(audioElement.currentTime);
+}
+
+function loadSavedOffset(jobId) {
+  const saved = window.localStorage.getItem(transcriptStorageKey(jobId));
+  if (saved === null) {
+    return 0;
+  }
+  const parsed = Number(saved);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function updateSelectedFileLabel() {
@@ -145,6 +180,9 @@ function renderTranscript(data) {
     span.className = "transcript-word";
     span.dataset.wordIndex = String(index);
     span.textContent = data.text.slice(word.char_start, word.char_end);
+    if (typeof word.start_time === "number") {
+      span.dataset.startTime = String(word.start_time);
+    }
     transcriptViewer.append(span);
     cursor = word.char_end;
   });
@@ -174,24 +212,27 @@ function setActiveWord(index) {
     return;
   }
   next.classList.add("is-active");
-  next.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+  if (!audioElement.paused && followPlaybackInput.checked) {
+    next.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+  }
 }
 
 function updateTranscriptForCurrentTime(currentTime) {
   if (!transcriptData || !transcriptData.words || !transcriptData.words.length) {
     return;
   }
+  const adjustedTime = Math.max(0, currentTime + transcriptOffsetSeconds);
 
   let foundIndex = -1;
   for (let index = 0; index < transcriptData.words.length; index += 1) {
     const word = transcriptData.words[index];
-    if (currentTime >= word.start_time && currentTime < word.end_time) {
+    if (adjustedTime >= word.start_time && adjustedTime < word.end_time) {
       foundIndex = index;
       break;
     }
   }
 
-  if (foundIndex === -1 && currentTime >= transcriptData.words[transcriptData.words.length - 1].end_time) {
+  if (foundIndex === -1 && adjustedTime >= transcriptData.words[transcriptData.words.length - 1].end_time) {
     foundIndex = transcriptData.words.length - 1;
   }
 
@@ -199,17 +240,19 @@ function updateTranscriptForCurrentTime(currentTime) {
 }
 
 async function loadTranscript(job) {
-  transcriptData = null;
-  activeWordIndex = -1;
   if (!job || !job.transcript_url) {
+    transcriptData = null;
+    activeWordIndex = -1;
     loadedTranscriptJobId = null;
     transcriptViewer.innerHTML = `<p class="transcript-empty">Pick a finished track to follow the spoken text word by word.</p>`;
     readerMode.textContent = "Waiting for a completed track";
     return;
   }
-  if (loadedTranscriptJobId === job.id) {
+  if (loadedTranscriptJobId === job.id && transcriptData) {
     return;
   }
+  transcriptData = null;
+  activeWordIndex = -1;
   const response = await fetch(job.transcript_url);
   if (!response.ok) {
     loadedTranscriptJobId = null;
@@ -220,6 +263,8 @@ async function loadTranscript(job) {
   const data = await response.json();
   loadedTranscriptJobId = job.id;
   renderTranscript(data);
+  setTranscriptOffset(loadSavedOffset(job.id), { persist: false });
+  updateTranscriptForCurrentTime(audioElement.currentTime);
 }
 
 function syncSelectedJob() {
@@ -239,6 +284,7 @@ function syncSelectedJob() {
   downloadLink.href = current.download_url;
   downloadLink.textContent = `Download ${String(current.audio_format || "").toUpperCase()}`;
   downloadLink.classList.remove("hidden");
+  setTranscriptOffset(loadSavedOffset(current.id), { persist: false });
   loadTranscript(current);
 }
 
@@ -255,6 +301,11 @@ function selectJob(jobId) {
   loadedTranscriptJobId = null;
   syncSelectedJob();
   renderJobs();
+}
+
+function nudgeTranscriptOffset(delta) {
+  const next = Math.max(-3, Math.min(3, transcriptOffsetSeconds + delta));
+  setTranscriptOffset(next);
 }
 
 async function loadVoices() {
@@ -374,10 +425,34 @@ audioElement.addEventListener("seeked", () => {
   updateTranscriptForCurrentTime(audioElement.currentTime);
 });
 
+transcriptViewer.addEventListener("click", (event) => {
+  const target = event.target.closest(".transcript-word");
+  if (!target) {
+    return;
+  }
+  const startTime = Number(target.dataset.startTime);
+  if (Number.isFinite(startTime)) {
+    audioElement.currentTime = Math.max(0, startTime - transcriptOffsetSeconds);
+    updateTranscriptForCurrentTime(audioElement.currentTime);
+  }
+});
+
 fileInput.addEventListener("change", updateSelectedFileLabel);
 voiceSelect.addEventListener("change", updateVoiceDescription);
 form.addEventListener("submit", submitJob);
 clearButton.addEventListener("click", clearForm);
+syncOffsetInput.addEventListener("input", () => {
+  setTranscriptOffset(Number(syncOffsetInput.value));
+});
+syncEarlierButton.addEventListener("click", () => {
+  nudgeTranscriptOffset(-0.1);
+});
+syncLaterButton.addEventListener("click", () => {
+  nudgeTranscriptOffset(0.1);
+});
+syncResetButton.addEventListener("click", () => {
+  setTranscriptOffset(0);
+});
 
 ["dragenter", "dragover"].forEach((eventName) => {
   dropzone.addEventListener(eventName, (event) => {

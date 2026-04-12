@@ -134,6 +134,22 @@
             </div>
             <p id="reader-mode" class="reader-mode">Waiting for a completed track</p>
           </div>
+          <div class="reader-controls">
+            <label class="sync-control">
+              <span>Transcript Shift</span>
+              <input id="sync-offset" type="range" min="-3" max="3" step="0.05" value="0" />
+            </label>
+            <div class="sync-actions">
+              <span id="sync-offset-value" class="sync-offset-value">0.00s</span>
+              <button type="button" id="sync-earlier" class="ghost-button compact-button">Earlier</button>
+              <button type="button" id="sync-later" class="ghost-button compact-button">Later</button>
+              <button type="button" id="sync-reset" class="ghost-button compact-button">Reset</button>
+            </div>
+            <label class="follow-toggle">
+              <input id="follow-playback" type="checkbox" checked />
+              <span>Auto-follow while playing</span>
+            </label>
+          </div>
           <div id="transcript-viewer" class="transcript-viewer">
             <p class="transcript-empty">Pick a finished track to follow the spoken text word by word.</p>
           </div>

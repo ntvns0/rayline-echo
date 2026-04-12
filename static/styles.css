@@ -407,6 +407,48 @@ button:hover,
   color: var(--muted);
 }
 
+.reader-controls {
+  display: grid;
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+
+.sync-control {
+  display: grid;
+  gap: 0.45rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.sync-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.sync-offset-value {
+  min-width: 4.5rem;
+  color: var(--accent-deep);
+  font-weight: 800;
+}
+
+.compact-button {
+  padding: 0.72rem 0.95rem;
+}
+
+.follow-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.follow-toggle input {
+  accent-color: var(--accent);
+}
+
 .ownership-copy {
   display: grid;
   gap: 0.65rem;
@@ -437,7 +479,12 @@ button:hover,
 
 .transcript-word {
   border-radius: 0.45rem;
+  cursor: pointer;
   transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+
+.transcript-word:hover {
+  background: rgba(216, 111, 69, 0.1);
 }
 
 .transcript-word.is-active {
@@ -493,6 +540,7 @@ button:hover,
   .actions,
   .player-controls,
   .timeline-wrap,
+  .sync-actions,
   .panel-header,
   .job-topline,
   .job-actions {
