@@ -38,7 +38,7 @@ const calibrateStartButton = document.getElementById("calibrate-start");
 const calibrateEndButton = document.getElementById("calibrate-end");
 const clearCalibrationButton = document.getElementById("clear-calibration");
 const calibrationStatus = document.getElementById("calibration-status");
-const MAX_BASE_OFFSET_SECONDS = 3;
+const MAX_BASE_OFFSET_SECONDS = 15;
 const MAX_DRIFT_SECONDS = 20;
 
 let jobs = [];
@@ -643,10 +643,10 @@ syncDriftInput.addEventListener("input", () => {
   setTranscriptDrift(Number(syncDriftInput.value));
 });
 syncEarlierButton.addEventListener("click", () => {
-  nudgeTranscriptOffset(0.1);
+  nudgeTranscriptOffset(0.25);
 });
 syncLaterButton.addEventListener("click", () => {
-  nudgeTranscriptOffset(-0.1);
+  nudgeTranscriptOffset(-0.25);
 });
 driftLessButton.addEventListener("click", () => {
   nudgeTranscriptDrift(-0.5);

@@ -1,202 +1,191 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TTS Studio</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="/static/styles.css" />
-  </head>
-  <body>
-    <main class="shell">
-      <section class="hero">
-        <p class="eyebrow">Text To Speech</p>
-        <h1>Turn raw text files into playable audio with live processing status.</h1>
-        <p class="lede">
-          Drop a text file, upload one manually, or paste content directly. We synthesize
-          it into audio, show chunk-by-chunk progress, and keep finished tracks ready in a
-          custom player.
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TTS Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+
+<body>
+  <main class="shell">
+    <section class="hero">
+      <p class="eyebrow">Text To Speech</p>
+      <h1>Turn raw text files into playable audio with live processing status.</h1>
+      <p class="lede">
+        Drop a text file, upload one manually, or paste content directly. We synthesize
+        it into audio, show chunk-by-chunk progress, and keep finished tracks ready in a
+        custom player.
+      </p>
+      <div class="credit-banner">
+        <p><strong>Created by Nate Evans</strong> with implementation assistance from OpenAI Codex.</p>
+        <p>
+          Free for personal and non-commercial use. For any for-profit or commercial use,
+          contact Nate Evans first for a one-time paid license.
         </p>
-        <div class="credit-banner">
-          <p><strong>Created by Nate Evans</strong> with implementation assistance from OpenAI Codex.</p>
-          <p>
-            Free for personal and non-commercial use. For any for-profit or commercial use,
-            contact Nate Evans first for a one-time paid license.
-          </p>
-        </div>
-      </section>
+      </div>
+    </section>
 
-      <section class="workspace">
-        <section class="panel intake-panel">
-          <div class="panel-header">
-            <h2>Create A Track</h2>
-            <label class="voice-picker">
-              <span>Voice</span>
-              <select id="voice-select"></select>
-            </label>
-          </div>
-          <p id="voice-description" class="voice-description">
-            Most natural voices use online neural synthesis. Local Piper voices remain available offline.
-          </p>
-
-          <form id="tts-form" class="intake-form">
-            <label
-              id="dropzone"
-              class="dropzone"
-              for="file-input"
-              tabindex="0"
-              aria-label="Upload or drag and drop a text file"
-            >
-              <input id="file-input" name="file" type="file" accept=".txt,.md,.log,.csv" hidden />
-              <span class="dropzone-kicker">Drag and drop</span>
-              <strong>Drop a text file here</strong>
-              <span>or click to browse for a plain text file</span>
-              <span id="selected-file" class="selected-file">No file selected</span>
-            </label>
-
-            <label class="text-field">
-              <span>Track name for pasted text</span>
-              <input
-                id="title-input"
-                name="title"
-                type="text"
-                placeholder="Optional. If blank, we will name it from the opening words."
-              />
-            </label>
-
-            <label class="text-field">
-              <span>Paste text</span>
-              <textarea
-                id="text-input"
-                name="text"
-                placeholder="Paste an article, notes, or a script here..."
-              ></textarea>
-            </label>
-
-            <div class="actions">
-              <button type="submit" class="primary-button">Start Processing</button>
-              <button type="button" id="clear-button" class="ghost-button">Clear</button>
-            </div>
-          </form>
-        </section>
-
-        <section class="panel jobs-panel">
-          <div class="panel-header">
-            <h2>Your Library</h2>
-            <p id="job-count">0 jobs</p>
-          </div>
-          <div id="job-list" class="job-list">
-            <div class="empty-state">No tracks yet. Submit text to start building your library.</div>
-          </div>
-        </section>
-      </section>
-
-      <section class="panel player-panel">
+    <section class="workspace">
+      <section class="panel intake-panel">
         <div class="panel-header">
-          <div>
-            <h2>Player</h2>
-            <p id="player-subtitle">Choose a completed track to listen.</p>
-          </div>
-          <a id="download-link" class="ghost-link hidden" href="#">Download WAV</a>
+          <h2>Create A Track</h2>
+          <label class="voice-picker">
+            <span>Voice</span>
+            <select id="voice-select"></select>
+          </label>
         </div>
+        <p id="voice-description" class="voice-description">
+          Most natural voices use online neural synthesis. Local Piper voices remain available offline.
+        </p>
 
-        <div class="player-card">
-          <div class="track-meta">
-            <p class="track-label">Selected Track</p>
-            <h3 id="track-title">Nothing selected</h3>
-            <p id="track-voice" class="track-voice">No voice selected</p>
-          </div>
+        <form id="tts-form" class="intake-form">
+          <label id="dropzone" class="dropzone" for="file-input" tabindex="0"
+            aria-label="Upload or drag and drop a text file">
+            <input id="file-input" name="file" type="file" accept=".txt,.md,.log,.csv" hidden />
+            <span class="dropzone-kicker">Drag and drop</span>
+            <strong>Drop a text file here</strong>
+            <span>or click to browse for a plain text file</span>
+            <span id="selected-file" class="selected-file">No file selected</span>
+          </label>
 
-          <div class="player-controls">
-            <button type="button" id="back-button" class="round-button">-5s</button>
-            <button type="button" id="play-button" class="play-button">Play</button>
-            <button type="button" id="pause-button" class="round-button">Pause</button>
-            <button type="button" id="forward-button" class="round-button">+5s</button>
-          </div>
+          <label class="text-field">
+            <span>Track name for pasted text</span>
+            <input id="title-input" name="title" type="text"
+              placeholder="Optional. If blank, we will name it from the opening words." />
+          </label>
 
-          <div class="timeline-wrap">
-            <span id="current-time">0:00</span>
-            <input id="timeline" type="range" min="0" max="100" value="0" step="0.1" />
-            <span id="duration-time">0:00</span>
-          </div>
-        </div>
+          <label class="text-field">
+            <span>Paste text</span>
+            <textarea id="text-input" name="text" placeholder="Paste an article, notes, or a script here..."></textarea>
+          </label>
 
-        <div class="reader-card">
-          <div class="reader-header">
-            <div>
-              <p class="track-label">Read Along</p>
-              <h3>Synced Transcript</h3>
-            </div>
-            <p id="reader-mode" class="reader-mode">Waiting for a completed track</p>
+          <div class="actions">
+            <button type="submit" class="primary-button">Start Processing</button>
+            <button type="button" id="clear-button" class="ghost-button">Clear</button>
           </div>
-          <div class="reader-controls">
-            <label class="sync-control">
-              <span>Base Shift</span>
-              <input id="sync-offset" type="range" min="-3" max="3" step="0.05" value="0" />
-            </label>
-            <label class="sync-control">
-              <span>Drift Correction By End</span>
-              <input id="sync-drift" type="range" min="-20" max="20" step="0.25" value="0" />
-            </label>
-            <div class="sync-actions">
-              <span id="sync-offset-value" class="sync-offset-value">0.00s</span>
-              <span id="sync-drift-value" class="sync-offset-value">0.00s by end</span>
-              <button type="button" id="sync-earlier" class="ghost-button compact-button">Earlier</button>
-              <button type="button" id="sync-later" class="ghost-button compact-button">Later</button>
-              <button type="button" id="drift-less" class="ghost-button compact-button">Less Drift</button>
-              <button type="button" id="drift-more" class="ghost-button compact-button">More Drift</button>
-              <button type="button" id="sync-reset" class="ghost-button compact-button">Reset</button>
-            </div>
-            <div class="sync-actions">
-              <button type="button" id="calibrate-start" class="ghost-button compact-button">Set Start Point</button>
-              <button type="button" id="calibrate-end" class="ghost-button compact-button">Set End Point</button>
-              <button type="button" id="clear-calibration" class="ghost-button compact-button">Clear Points</button>
-            </div>
-            <p id="calibration-status" class="sync-help">
-              Two-point calibration: set a start point, then an end point, then click the matching transcript words.
-            </p>
-            <p class="sync-help">
-              Click a word to align the transcript to the current playback point without moving the audio.
-            </p>
-            <label class="follow-toggle">
-              <input id="follow-playback" type="checkbox" checked />
-              <span>Auto-follow while playing</span>
-            </label>
-          </div>
-          <div id="transcript-viewer" class="transcript-viewer">
-            <p class="transcript-empty">Pick a finished track to follow the spoken text word by word.</p>
-          </div>
-        </div>
-
-        <audio id="audio-element" preload="metadata"></audio>
+        </form>
       </section>
 
-      <section class="panel ownership-panel">
+      <section class="panel jobs-panel">
         <div class="panel-header">
-          <div>
-            <h2>Creator And License</h2>
-            <p>Clear ownership and usage terms for this project.</p>
-          </div>
+          <h2>Your Library</h2>
+          <p id="job-count">0 jobs</p>
         </div>
-        <div class="ownership-copy">
-          <p><strong>Creator:</strong> Nate Evans</p>
-          <p><strong>Built with assistance from:</strong> OpenAI Codex</p>
-          <p><strong>Allowed:</strong> personal, educational, and other non-commercial use</p>
-          <p><strong>Not allowed without permission:</strong> any commercial or for-profit use</p>
-          <p>
-            <strong>Commercial licensing:</strong> contact Nate Evans via
-            <a href="https://github.com/ntvns0" target="_blank" rel="noreferrer">github.com/ntvns0</a>
-            to arrange a one-time paid license.
-          </p>
+        <div id="job-list" class="job-list">
+          <div class="empty-state">No tracks yet. Submit text to start building your library.</div>
         </div>
       </section>
-    </main>
+    </section>
 
-    <script src="/static/app.js" defer></script>
-  </body>
+    <section class="panel player-panel">
+      <div class="panel-header">
+        <div>
+          <h2>Player</h2>
+          <p id="player-subtitle">Choose a completed track to listen.</p>
+        </div>
+        <a id="download-link" class="ghost-link hidden" href="#">Download WAV</a>
+      </div>
+
+      <div class="player-card">
+        <div class="track-meta">
+          <p class="track-label">Selected Track</p>
+          <h3 id="track-title">Nothing selected</h3>
+          <p id="track-voice" class="track-voice">No voice selected</p>
+        </div>
+
+        <div class="player-controls">
+          <button type="button" id="back-button" class="round-button">-5s</button>
+          <button type="button" id="play-button" class="play-button">Play</button>
+          <button type="button" id="pause-button" class="round-button">Pause</button>
+          <button type="button" id="forward-button" class="round-button">+5s</button>
+        </div>
+
+        <div class="timeline-wrap">
+          <span id="current-time">0:00</span>
+          <input id="timeline" type="range" min="0" max="100" value="0" step="0.1" />
+          <span id="duration-time">0:00</span>
+        </div>
+      </div>
+
+      <div class="reader-card">
+        <div class="reader-header">
+          <div>
+            <p class="track-label">Read Along</p>
+            <h3>Synced Transcript</h3>
+          </div>
+          <p id="reader-mode" class="reader-mode">Waiting for a completed track</p>
+        </div>
+        <div class="reader-controls">
+          <label class="sync-control">
+            <span>Base Shift</span>
+            <input id="sync-offset" type="range" min="-15" max="15" step="0.1" value="0" />
+          </label>
+          <label class="sync-control">
+            <span>Drift Correction By End</span>
+            <input id="sync-drift" type="range" min="-20" max="20" step="0.25" value="0" />
+          </label>
+          <div class="sync-actions">
+            <span id="sync-offset-value" class="sync-offset-value">0.00s</span>
+            <span id="sync-drift-value" class="sync-offset-value">0.00s by end</span>
+            <button type="button" id="sync-earlier" class="ghost-button compact-button">Earlier</button>
+            <button type="button" id="sync-later" class="ghost-button compact-button">Later</button>
+            <button type="button" id="drift-less" class="ghost-button compact-button">Less Drift</button>
+            <button type="button" id="drift-more" class="ghost-button compact-button">More Drift</button>
+            <button type="button" id="sync-reset" class="ghost-button compact-button">Reset</button>
+          </div>
+          <div class="sync-actions">
+            <button type="button" id="calibrate-start" class="ghost-button compact-button">Set Start Point</button>
+            <button type="button" id="calibrate-end" class="ghost-button compact-button">Set End Point</button>
+            <button type="button" id="clear-calibration" class="ghost-button compact-button">Clear Points</button>
+          </div>
+          <p id="calibration-status" class="sync-help">
+            Two-point calibration: set a start point, then an end point, then click the matching transcript words.
+          </p>
+          <p class="sync-help">
+            Click a word to align the transcript to the current playback point without moving the audio.
+          </p>
+          <label class="follow-toggle">
+            <input id="follow-playback" type="checkbox" checked />
+            <span>Auto-follow while playing</span>
+          </label>
+        </div>
+        <div id="transcript-viewer" class="transcript-viewer">
+          <p class="transcript-empty">Pick a finished track to follow the spoken text word by word.</p>
+        </div>
+      </div>
+
+      <audio id="audio-element" preload="metadata"></audio>
+    </section>
+
+    <section class="panel ownership-panel">
+      <div class="panel-header">
+        <div>
+          <h2>Creator And License</h2>
+          <p>Clear ownership and usage terms for this project.</p>
+        </div>
+      </div>
+      <div class="ownership-copy">
+        <p><strong>Creator:</strong> Nate Evans</p>
+        <p><strong>Built with assistance from:</strong> OpenAI Codex</p>
+        <p><strong>Allowed:</strong> personal, educational, and other non-commercial use</p>
+        <p><strong>Not allowed without permission:</strong> any commercial or for-profit use</p>
+        <p>
+          <strong>Commercial licensing:</strong> contact Nate Evans via
+          <a href="https://github.com/ntvns0" target="_blank" rel="noreferrer">github.com/ntvns0</a>
+          to arrange a one-time paid license.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js" defer></script>
+</body>
+
 </html>
