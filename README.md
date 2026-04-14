@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="static/branding/rayline_echo.png" alt="Rayline Echo" width="720">
+</p>
+
 # Rayline Echo
 
 Turn documents, books, and notes into a personal audiobook library.
