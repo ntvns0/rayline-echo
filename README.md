@@ -1,6 +1,6 @@
 # TTS Web App
 
-A local-first text-to-speech web app built with FastAPI, premium Edge neural voices, and Piper.
+A local-first text-to-speech web app built with FastAPI, premium Edge neural voices, Kokoro local premium voices, and Piper fallback voices.
 
 Created by Nate Evans, with implementation assistance from OpenAI Codex.
 
@@ -19,9 +19,16 @@ By using this repository, you agree to the terms in [LICENSE](LICENSE).
 - Upload an EPUB, PDF, or plain text file, paste text, or drag and drop a file
 - Queue TTS jobs and watch chunk-by-chunk processing progress
 - Choose between more natural premium neural voices and offline local voices
+- Use Kokoro as the new primary local premium voice provider, with Piper kept as a fallback
 - Keep completed tracks in a selectable library that survives app restarts
+- Rename, favorite, filter, delete, and reprocess saved tracks from the library
 - Play, pause, skip forward/back 5 seconds, and scrub on a timeline
 - Follow the spoken text in a synced read-along viewer with word highlighting
+- Browse extracted PDF pages and EPUB chapters from a section rail, then jump directly into a section while listening
+- Watch queued and processing jobs from the create panel while renders are running
+- See live CPU and GPU load inside the web app while jobs are processing
+- Resume interrupted long-running Edge jobs from saved chunk checkpoints instead of restarting from zero
+- Auto-detect whether local ONNX voices are using GPU or CPU, with safe CPU fallback when CUDA runtime pieces are missing
 
 ## Run
 
@@ -35,13 +42,31 @@ Open `http://127.0.0.1:8000`.
 ## Notes
 
 - The app offers higher-quality Microsoft Edge neural voices by default. These require internet access during synthesis.
-- The app also keeps local Piper fallback voices in `./models`, including `en_US-ryan-high` and `en_US-lessac-medium`.
+- The app keeps Kokoro model assets in `./models/kokoro` and Piper fallback voices in `./models`.
+- Kokoro local voices now provide the best fully offline quality in the app, while Piper remains available as a lighter fallback.
+- Local ONNX voices can use GPU through ONNX Runtime when `onnxruntime-gpu` and the required CUDA/cuDNN libraries are available. Otherwise they fall back to CPU automatically and the UI will say so.
 - Uploaded files must be under 5 MB. Text files must be UTF-8.
 - PDF uploads first use embedded text extraction, then fall back to local OCR for scanned/image PDFs.
 - EPUB uploads extract chapter/document text and feed it into the same TTS and synced transcript flow.
+- Long-form documents now keep their extracted sections so the reader can show chapter or page navigation above the transcript.
+- The saved library can filter by favorites, recent listens, pasted text, PDF, EPUB, and text-file sources.
 - Generated `data/` files and downloaded `models/` are intentionally ignored by git.
 - Track metadata is stored locally so completed audio files show back up in the library after you restart the app.
 - Uploaded text files use their source filename for the generated audio. Pasted text can use a user-supplied title or an automatic title based on the opening words.
+
+## Terminal Monitoring
+
+Use the bundled monitor script while long jobs run:
+
+```bash
+python3 monitor.py jobs
+python3 monitor.py processes --limit 10
+python3 monitor.py cpu
+python3 monitor.py gpu
+python3 monitor.py watch --interval 3
+```
+
+`watch` combines queued/processing TTS jobs, top processes, CPU activity, and GPU usage when `nvidia-smi` is available.
 
 ## Licensing
 

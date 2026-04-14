@@ -9,6 +9,22 @@ const voiceSelect = document.getElementById("voice-select");
 const voiceDescription = document.getElementById("voice-description");
 const jobList = document.getElementById("job-list");
 const jobCount = document.getElementById("job-count");
+const librarySearchInput = document.getElementById("library-search");
+const libraryFilterSelect = document.getElementById("library-filter");
+const librarySortSelect = document.getElementById("library-sort");
+const activeJobList = document.getElementById("active-job-list");
+const queuePanelTitle = document.getElementById("queue-panel-title");
+const queuePanelCount = document.getElementById("queue-panel-count");
+const systemPanelTitle = document.getElementById("system-panel-title");
+const systemPanelUpdated = document.getElementById("system-panel-updated");
+const cpuBusyPill = document.getElementById("cpu-busy-pill");
+const cpuSummary = document.getElementById("cpu-summary");
+const cpuMeterFill = document.getElementById("cpu-meter-fill");
+const cpuBreakdown = document.getElementById("cpu-breakdown");
+const gpuBusyPill = document.getElementById("gpu-busy-pill");
+const gpuSummary = document.getElementById("gpu-summary");
+const gpuMeterFill = document.getElementById("gpu-meter-fill");
+const gpuBreakdown = document.getElementById("gpu-breakdown");
 
 const audioElement = document.getElementById("audio-element");
 const playButton = document.getElementById("play-button");
@@ -23,6 +39,8 @@ const trackVoice = document.getElementById("track-voice");
 const playerSubtitle = document.getElementById("player-subtitle");
 const downloadLink = document.getElementById("download-link");
 const transcriptViewer = document.getElementById("transcript-viewer");
+const sectionNav = document.getElementById("section-nav");
+const sectionCount = document.getElementById("section-count");
 const readerMode = document.getElementById("reader-mode");
 const syncOffsetInput = document.getElementById("sync-offset");
 const syncDriftInput = document.getElementById("sync-drift");
@@ -46,6 +64,7 @@ let selectedJobId = null;
 let availableVoices = [];
 let transcriptData = null;
 let activeWordIndex = -1;
+let activeSectionIndex = -1;
 let loadedTranscriptJobId = null;
 let transcriptOffsetSeconds = 0;
 let transcriptDriftSeconds = 0;
@@ -54,6 +73,7 @@ let calibrationPoints = {
   start: null,
   end: null,
 };
+let systemStatus = null;
 
 function transcriptSettingsKey(jobId) {
   return `tts-sync-settings:${jobId}`;
@@ -248,7 +268,7 @@ function renderVoices(voiceItems) {
   voiceItems.forEach((voice) => {
     const option = document.createElement("option");
     option.value = voice.id;
-    option.textContent = `${voice.label} • ${voice.provider === "edge" ? "Premium" : "Offline"}`;
+    option.textContent = `${voice.label} • ${voice.provider === "edge" ? "Premium" : voice.compute_label || "Offline"}`;
     voiceSelect.appendChild(option);
   });
   updateVoiceDescription();
@@ -259,8 +279,222 @@ function updateVoiceDescription() {
   if (!current) {
     return;
   }
-  const providerLabel = current.provider === "edge" ? "Premium online neural voice" : "Offline local voice";
-  voiceDescription.textContent = `${providerLabel} • ${current.description}`;
+  const providerLabel = current.provider === "edge"
+    ? "Premium online neural voice"
+    : `Offline local voice on ${current.compute_label || current.compute_target || "CPU"}`;
+  voiceDescription.textContent = `${providerLabel} • ${current.description}${current.compute_note ? ` • ${current.compute_note}` : ""}`;
+}
+
+function normalizeSourceType(sourceType, originalFilename = "") {
+  if (sourceType === "file" && originalFilename) {
+    const suffix = originalFilename.split(".").pop()?.toLowerCase();
+    if (["txt", "md", "csv", "log"].includes(suffix)) {
+      return "txt";
+    }
+    if (suffix === "pdf" || suffix === "epub") {
+      return suffix;
+    }
+  }
+  if (["txt", "md", "csv", "log"].includes(sourceType)) {
+    return "txt";
+  }
+  return sourceType;
+}
+
+function sourceTypeLabel(job) {
+  const normalized = normalizeSourceType(job.source_type, job.original_filename);
+  if (normalized === "paste") {
+    return "pasted";
+  }
+  if (normalized === "txt") {
+    return "text";
+  }
+  return normalized;
+}
+
+function formatRelativeTime(timestamp) {
+  if (!timestamp) {
+    return "Not played yet";
+  }
+  const secondsAgo = Math.max(0, Math.round((Date.now() / 1000) - timestamp));
+  if (secondsAgo < 60) {
+    return "Played just now";
+  }
+  if (secondsAgo < 3600) {
+    return `Played ${Math.floor(secondsAgo / 60)}m ago`;
+  }
+  if (secondsAgo < 86400) {
+    return `Played ${Math.floor(secondsAgo / 3600)}h ago`;
+  }
+  return `Played ${Math.floor(secondsAgo / 86400)}d ago`;
+}
+
+function formatDurationCompact(totalSeconds) {
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) {
+    return "0s";
+  }
+  const rounded = Math.round(totalSeconds);
+  const minutes = Math.floor(rounded / 60);
+  const seconds = rounded % 60;
+  if (minutes <= 0) {
+    return `${seconds}s`;
+  }
+  if (minutes < 60) {
+    return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return `${hours}h ${remainingMinutes}m`;
+}
+
+function formatUpdatedTime(timestamp) {
+  if (!timestamp) {
+    return "Not loaded";
+  }
+  const ageSeconds = Math.max(0, Math.round((Date.now() / 1000) - timestamp));
+  if (ageSeconds <= 2) {
+    return "Just updated";
+  }
+  return `${ageSeconds}s ago`;
+}
+
+function processingMeta(job) {
+  const elapsed = Number(job.processing_elapsed_seconds);
+  const progress = Number(job.progress || 0);
+  if (job.state === "processing" && Number.isFinite(elapsed) && elapsed > 0) {
+    if (progress > 0.03) {
+      const estimatedTotal = elapsed / progress;
+      const remaining = Math.max(0, estimatedTotal - elapsed);
+      return `Running ${formatDurationCompact(elapsed)} • ETA ${formatDurationCompact(remaining)}`;
+    }
+    return `Running ${formatDurationCompact(elapsed)}`;
+  }
+  if (job.state === "completed" && Number.isFinite(Number(job.completed_in_seconds))) {
+    return `Completed in ${formatDurationCompact(Number(job.completed_in_seconds))}`;
+  }
+  if (job.state === "failed" && Number.isFinite(elapsed) && elapsed > 0) {
+    return `Stopped after ${formatDurationCompact(elapsed)}`;
+  }
+  return null;
+}
+
+function activeQueueJobs() {
+  return [...jobs]
+    .filter((job) => job.state === "processing" || job.state === "queued")
+    .sort((left, right) => {
+      const stateWeight = (job) => (job.state === "processing" ? 0 : 1);
+      return stateWeight(left) - stateWeight(right) || left.created_at - right.created_at;
+    });
+}
+
+function renderActiveQueue() {
+  const activeJobs = activeQueueJobs();
+  queuePanelCount.textContent = `${activeJobs.length} active`;
+  queuePanelTitle.textContent = activeJobs.length
+    ? `${activeJobs.filter((job) => job.state === "processing").length || 0} processing • ${activeJobs.filter((job) => job.state === "queued").length || 0} queued`
+    : "No jobs running";
+
+  if (!activeJobs.length) {
+    activeJobList.innerHTML = `<div class="empty-state">Queued and processing tracks will appear here while they work.</div>`;
+    return;
+  }
+
+  activeJobList.innerHTML = "";
+  activeJobs.forEach((job, index) => {
+    const progressPercent = Math.max(3, Math.round(job.progress * 100));
+    const item = document.createElement("article");
+    item.className = `active-job-card ${job.state === "processing" ? "is-processing" : "is-queued"}`;
+    item.innerHTML = `
+      <div class="active-job-topline">
+        <strong>${job.title}</strong>
+        <span class="status-pill status-${job.state}">${job.state === "processing" ? "Processing" : `Queued #${index + 1 - activeJobs.filter((entry) => entry.state === "processing").length}`}</span>
+      </div>
+      <p class="job-meta">${sourceTypeLabel(job)} • ${job.voice_label} • ${job.compute_target === "cloud" ? "cloud" : `local ${job.compute_target || "cpu"}`}</p>
+      <div class="job-progress" aria-hidden="true">
+        <span style="width:${job.state === "processing" ? progressPercent : 8}%"></span>
+      </div>
+      <p class="job-meta">${processingMeta(job) || (job.state === "queued" ? "Waiting for earlier jobs to finish" : statusLabel(job))}</p>
+    `;
+    activeJobList.appendChild(item);
+  });
+}
+
+function renderSystemStatus() {
+  const cpu = systemStatus?.cpu || { available: false, summary: "CPU stats unavailable right now." };
+  const gpu = systemStatus?.gpu || { available: false, summary: "GPU stats unavailable right now." };
+  const piper = systemStatus?.piper || { label: "CPU", using_cuda: false };
+
+  const cpuBusy = Number(cpu.cpu_busy_percent || 0);
+  const gpuBusy = Number(gpu.gpu_util_percent || 0);
+
+  systemPanelTitle.textContent = activeQueueJobs().length
+    ? `Machine load while your queue is running • Local ONNX voices on ${piper.label}`
+    : `Machine load while the app is idle • Local ONNX voices on ${piper.label}`;
+  systemPanelUpdated.textContent = formatUpdatedTime(systemStatus?.timestamp);
+
+  cpuBusyPill.textContent = cpu.available ? `${cpuBusy}%` : "--";
+  cpuSummary.textContent = cpu.summary || "CPU stats unavailable right now.";
+  cpuMeterFill.style.width = `${Math.max(0, Math.min(100, cpuBusy))}%`;
+  cpuBreakdown.textContent = cpu.available
+    ? `User ${cpu.user_percent}% • System ${cpu.system_percent}% • Wait ${cpu.wait_percent}%`
+    : "User -- • System -- • Wait --";
+
+  gpuBusyPill.textContent = gpu.available ? `${gpuBusy}%` : "--";
+  gpuSummary.textContent = gpu.summary || "GPU stats unavailable right now.";
+  gpuMeterFill.style.width = `${Math.max(0, Math.min(100, gpuBusy))}%`;
+  gpuBreakdown.textContent = gpu.available
+    ? `VRAM ${gpu.memory_used_mb}/${gpu.memory_total_mb} MB • Temp ${gpu.temperature_c}C`
+    : "VRAM -- • Temp --";
+}
+
+function filteredJobs() {
+  const filter = libraryFilterSelect.value;
+  const query = librarySearchInput.value.trim().toLowerCase();
+  const sort = librarySortSelect.value;
+  let visible = [...jobs];
+
+  if (filter === "favorites") {
+    visible = visible.filter((job) => job.favorite);
+  } else if (filter === "recent") {
+    visible = visible.filter((job) => job.is_recent);
+  } else if (filter !== "all") {
+    visible = visible.filter((job) => normalizeSourceType(job.source_type, job.original_filename) === filter);
+  }
+
+  if (query) {
+    visible = visible.filter((job) => {
+      const haystack = [
+        job.title,
+        job.original_filename || "",
+        job.preview || "",
+        job.voice_label || "",
+        sourceTypeLabel(job),
+      ].join(" ").toLowerCase();
+      return haystack.includes(query);
+    });
+  }
+
+  visible.sort((left, right) => {
+    if (sort === "newest") {
+      return right.created_at - left.created_at;
+    }
+    if (sort === "oldest") {
+      return left.created_at - right.created_at;
+    }
+    if (sort === "title") {
+      return left.title.localeCompare(right.title);
+    }
+    if (sort === "length") {
+      return (right.duration_seconds || 0) - (left.duration_seconds || 0);
+    }
+    return (
+      Number(right.favorite) - Number(left.favorite)
+      || (right.last_played_at || 0) - (left.last_played_at || 0)
+      || right.created_at - left.created_at
+    );
+  });
+
+  return visible;
 }
 
 function statusLabel(job) {
@@ -277,40 +511,62 @@ function statusLabel(job) {
 }
 
 function renderJobs() {
-  jobCount.textContent = `${jobs.length} ${jobs.length === 1 ? "job" : "jobs"}`;
+  const visibleJobs = filteredJobs();
+  jobCount.textContent = `${visibleJobs.length} ${visibleJobs.length === 1 ? "track" : "tracks"}`;
   if (!jobs.length) {
     jobList.innerHTML = `<div class="empty-state">No tracks yet. Submit text to start building your library.</div>`;
     return;
   }
+  if (!visibleJobs.length) {
+    jobList.innerHTML = `<div class="empty-state">No saved tracks match this filter yet.</div>`;
+    return;
+  }
 
   jobList.innerHTML = "";
-  jobs.forEach((job) => {
+  visibleJobs.forEach((job) => {
     const card = document.createElement("article");
     card.className = `job-card ${job.id === selectedJobId ? "is-selected" : ""}`;
     const progressPercent = Math.max(3, Math.round(job.progress * 100));
     const canPlay = job.state === "completed";
+    const showResume = job.state === "failed" && job.resumable;
     card.innerHTML = `
       <div class="job-topline">
-        <div>
-          <h3 class="job-title">${job.title}</h3>
-          <p class="job-meta">${job.source_type} • ${job.voice_label} • ${job.text_length.toLocaleString()} characters</p>
+        <div class="job-heading">
+          <div class="job-title-row">
+            <h3 class="job-title">${job.title}</h3>
+            ${job.favorite ? '<span class="job-badge favorite-badge">Favorite</span>' : ""}
+            ${job.is_recent ? '<span class="job-badge recent-badge">Recent</span>' : ""}
+          </div>
+          <p class="job-meta">${sourceTypeLabel(job)} • ${job.voice_label} • ${job.compute_target === "cloud" ? "cloud" : `local ${job.compute_target || "cpu"}`} • ${job.text_length.toLocaleString()} characters</p>
         </div>
         <span class="status-pill status-${job.state}">${statusLabel(job)}</span>
       </div>
       <div class="job-progress" aria-hidden="true">
         <span style="width:${progressPercent}%"></span>
       </div>
-      <p class="job-meta">Chunks ${job.completed_chunks}/${job.total_chunks || "?"}</p>
+      <p class="job-meta">Chunks ${job.completed_chunks}/${job.total_chunks || "?"} • ${formatRelativeTime(job.last_played_at)} • ${job.duration_seconds ? `${formatTime(job.duration_seconds)} long` : "Waiting for audio"}</p>
+      ${processingMeta(job) ? `<p class="job-timing">${processingMeta(job)}</p>` : ""}
       <p class="job-preview">${job.error || job.preview}</p>
-      <div class="job-actions">
-        <span class="job-meta">${job.duration_seconds ? `${formatTime(job.duration_seconds)} long` : "Waiting for audio"}</span>
-        <button type="button" data-job-id="${job.id}" ${canPlay ? "" : "disabled"}>${job.id === selectedJobId ? "Selected" : "Listen"}</button>
+      <div class="job-management">
+        <div class="job-primary-actions">
+          <button type="button" class="library-button ${showResume ? "action-resume" : "action-listen"} ${job.id === selectedJobId ? "is-selected-action" : ""}" data-action="${showResume ? "resume" : "listen"}" data-job-id="${job.id}" ${canPlay || showResume ? "" : "disabled"}>${showResume ? "Resume" : job.id === selectedJobId ? "Selected" : "Listen"}</button>
+          <button type="button" class="library-button action-favorite" data-action="favorite" data-job-id="${job.id}">${job.favorite ? "Unfavorite" : "Favorite"}</button>
+          <button type="button" class="library-button action-rename" data-action="rename" data-job-id="${job.id}">Rename</button>
+        </div>
+        <div class="job-actions job-actions-secondary">
+          <label class="inline-select voice-inline-select">
+            <span>Reprocess voice</span>
+            <select data-job-id="${job.id}" class="reprocess-voice-select">
+              ${availableVoices.map((voice) => `<option value="${voice.id}" ${voice.id === job.voice ? "selected" : ""}>${voice.label}</option>`).join("")}
+            </select>
+          </label>
+          <div class="job-secondary-actions">
+            <button type="button" class="library-button action-reprocess" data-action="reprocess" data-job-id="${job.id}">Reprocess</button>
+            <button type="button" class="library-button danger-button action-delete" data-action="delete" data-job-id="${job.id}">Delete</button>
+          </div>
+        </div>
       </div>
     `;
-    const button = card.querySelector("button");
-    if (button) {
-      button.addEventListener("click", () => selectJob(job.id));
-    }
     jobList.appendChild(card);
   });
 }
@@ -318,7 +574,9 @@ function renderJobs() {
 function renderTranscript(data) {
   transcriptData = data;
   activeWordIndex = -1;
+  activeSectionIndex = -1;
   transcriptViewer.innerHTML = "";
+  renderSectionNav(data);
 
   if (!data || !data.text || !data.words || !data.words.length) {
     transcriptViewer.innerHTML = `<p class="transcript-empty">Transcript timing is not available for this track.</p>`;
@@ -349,6 +607,117 @@ function renderTranscript(data) {
   if (cursor < data.text.length) {
     transcriptViewer.append(document.createTextNode(data.text.slice(cursor)));
   }
+}
+
+function renderSectionNav(data) {
+  sectionNav.innerHTML = "";
+  const sections = Array.isArray(data?.sections) ? data.sections.filter((section) => section?.title) : [];
+
+  if (!sections.length) {
+    sectionCount.textContent = "No sections yet";
+    sectionNav.innerHTML = `<p class="transcript-empty">This track does not have chapter or page markers yet.</p>`;
+    return;
+  }
+
+  sectionCount.textContent = sections.length === 1 ? "1 section" : `${sections.length} sections`;
+  sections.forEach((section, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "section-chip";
+    button.dataset.sectionIndex = String(index);
+    button.textContent = `${index + 1}. ${section.title}`;
+    sectionNav.append(button);
+  });
+}
+
+function setActiveSection(index) {
+  if (index === activeSectionIndex) {
+    return;
+  }
+
+  const previous = sectionNav.querySelector(".section-chip.is-active");
+  if (previous) {
+    previous.classList.remove("is-active");
+  }
+
+  activeSectionIndex = index;
+  if (index < 0) {
+    return;
+  }
+
+  const next = sectionNav.querySelector(`[data-section-index="${index}"]`);
+  if (!next) {
+    return;
+  }
+
+  next.classList.add("is-active");
+  if (!audioElement.paused && followPlaybackInput.checked) {
+    next.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+  }
+}
+
+function findActiveSectionIndex(adjustedTime, activeIndex) {
+  const sections = transcriptData?.sections;
+  if (!Array.isArray(sections) || !sections.length) {
+    return -1;
+  }
+
+  for (let index = 0; index < sections.length; index += 1) {
+    const section = sections[index];
+    if (
+      Number.isFinite(section.start_time)
+      && Number.isFinite(section.end_time)
+      && adjustedTime >= section.start_time
+      && adjustedTime < section.end_time
+    ) {
+      return index;
+    }
+  }
+
+  if (activeIndex >= 0) {
+    const activeWord = transcriptData?.words?.[activeIndex];
+    if (activeWord) {
+      for (let index = 0; index < sections.length; index += 1) {
+        const section = sections[index];
+        if (
+          Number.isFinite(section.char_start)
+          && Number.isFinite(section.char_end)
+          && activeWord.char_start >= section.char_start
+          && activeWord.char_end <= section.char_end
+        ) {
+          return index;
+        }
+      }
+    }
+  }
+
+  return adjustedTime > 0 ? sections.length - 1 : -1;
+}
+
+function jumpToSection(index) {
+  const section = transcriptData?.sections?.[index];
+  if (!section) {
+    return;
+  }
+
+  if (Number.isFinite(section.start_time) && Number.isFinite(audioElement.duration)) {
+    audioElement.currentTime = Math.max(0, Math.min(audioElement.duration, section.start_time));
+  } else if (Number.isFinite(section.start_time)) {
+    audioElement.currentTime = Math.max(0, section.start_time);
+  }
+
+  if (Number.isFinite(section.char_start)) {
+    const targetWord = transcriptData?.words?.find((word) => word.char_start >= section.char_start);
+    if (targetWord) {
+      const wordElement = transcriptViewer.querySelector(`[data-word-index="${transcriptData.words.indexOf(targetWord)}"]`);
+      if (wordElement) {
+        wordElement.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+      }
+    }
+  }
+
+  setActiveSection(index);
+  updateTranscriptForCurrentTime(audioElement.currentTime);
 }
 
 function setActiveWord(index) {
@@ -398,13 +767,17 @@ function updateTranscriptForCurrentTime(currentTime) {
   }
 
   setActiveWord(foundIndex);
+  setActiveSection(findActiveSectionIndex(adjustedTime, foundIndex));
 }
 
 async function loadTranscript(job) {
   if (!job || !job.transcript_url) {
     transcriptData = null;
     activeWordIndex = -1;
+    activeSectionIndex = -1;
     loadedTranscriptJobId = null;
+    sectionCount.textContent = "No sections yet";
+    sectionNav.innerHTML = `<p class="transcript-empty">Load a completed track to browse chapters or pages.</p>`;
     transcriptViewer.innerHTML = `<p class="transcript-empty">Pick a finished track to follow the spoken text word by word.</p>`;
     readerMode.textContent = "Waiting for a completed track";
     return;
@@ -417,6 +790,9 @@ async function loadTranscript(job) {
   const response = await fetch(job.transcript_url);
   if (!response.ok) {
     loadedTranscriptJobId = null;
+    activeSectionIndex = -1;
+    sectionCount.textContent = "No sections yet";
+    sectionNav.innerHTML = `<p class="transcript-empty">This track does not have chapter or page markers yet.</p>`;
     transcriptViewer.innerHTML = `<p class="transcript-empty">Transcript timing is not available for this track.</p>`;
     readerMode.textContent = "Transcript unavailable";
     return;
@@ -442,7 +818,7 @@ function syncSelectedJob() {
     audioElement.src = current.audio_url;
   }
   trackTitle.textContent = current.title;
-  trackVoice.textContent = `${current.voice_label} • ${current.provider === "edge" ? "premium neural" : "offline local"}`;
+  trackVoice.textContent = `${current.voice_label} • ${current.provider === "edge" ? "premium neural on cloud" : `offline local on ${current.compute_target || "cpu"}`}`;
   playerSubtitle.textContent = `${current.text_length.toLocaleString()} characters • ${formatTime(current.duration_seconds || 0)}`;
   downloadLink.href = current.download_url;
   downloadLink.textContent = `Download ${String(current.audio_format || "").toUpperCase()}`;
@@ -454,7 +830,7 @@ function syncSelectedJob() {
   loadTranscript(current);
 }
 
-function selectJob(jobId) {
+async function selectJob(jobId) {
   const job = jobs.find((item) => item.id === jobId);
   if (!job || job.state !== "completed") {
     return;
@@ -467,6 +843,16 @@ function selectJob(jobId) {
   loadedTranscriptJobId = null;
   pendingCalibrationPoint = null;
   syncSelectedJob();
+  try {
+    await patchJob(jobId, { touch_recent: true });
+  } catch {
+    // Keep selection usable even if the recents update fails.
+  }
+  const selected = jobs.find((item) => item.id === jobId);
+  if (selected) {
+    selected.last_played_at = Date.now() / 1000;
+    selected.is_recent = true;
+  }
   renderJobs();
 }
 
@@ -490,6 +876,9 @@ async function loadJobs() {
   const response = await fetch("/api/jobs");
   const data = await response.json();
   jobs = data.jobs;
+  if (data.system) {
+    systemStatus = data.system;
+  }
 
   if (!selectedJobId) {
     const newestCompleted = jobs.find((job) => job.state === "completed");
@@ -500,6 +889,91 @@ async function loadJobs() {
 
   syncSelectedJob();
   renderJobs();
+  renderActiveQueue();
+  renderSystemStatus();
+}
+
+async function loadSystemStatus() {
+  try {
+    const response = await fetch("/api/system");
+    if (!response.ok) {
+      throw new Error("Unable to load system metrics.");
+    }
+    systemStatus = await response.json();
+  } catch {
+    systemStatus = {
+      timestamp: Date.now() / 1000,
+      cpu: { available: false, summary: "CPU stats unavailable right now." },
+      gpu: { available: false, summary: "GPU stats unavailable right now." },
+    };
+  }
+  renderSystemStatus();
+}
+
+async function refreshJobsKeepingSelection() {
+  await loadJobs();
+  if (selectedJobId && !jobs.some((job) => job.id === selectedJobId)) {
+    selectedJobId = null;
+    audioElement.pause();
+    audioElement.removeAttribute("src");
+    audioElement.load();
+    downloadLink.classList.add("hidden");
+    trackTitle.textContent = "Nothing selected";
+    trackVoice.textContent = "No voice selected";
+    playerSubtitle.textContent = "Choose a completed track to listen.";
+    readerMode.textContent = "Waiting for a completed track";
+    transcriptViewer.innerHTML = `<p class="transcript-empty">Pick a finished track to follow the spoken text word by word.</p>`;
+    sectionCount.textContent = "No sections yet";
+    sectionNav.innerHTML = `<p class="transcript-empty">Load a completed track to browse chapters or pages.</p>`;
+  }
+}
+
+async function patchJob(jobId, payload) {
+  const response = await fetch(`/api/jobs/${jobId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || "Unable to update track.");
+  }
+  return response.json();
+}
+
+async function deleteJob(jobId) {
+  const response = await fetch(`/api/jobs/${jobId}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || "Unable to delete track.");
+  }
+  return response.json();
+}
+
+async function reprocessJob(jobId, voice) {
+  const response = await fetch(`/api/jobs/${jobId}/reprocess`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ voice }),
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || "Unable to reprocess track.");
+  }
+  return response.json();
+}
+
+async function resumeJob(jobId) {
+  const response = await fetch(`/api/jobs/${jobId}/resume`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || "Unable to resume track.");
+  }
+  return response.json();
 }
 
 async function submitJob(event) {
@@ -531,6 +1005,67 @@ async function submitJob(event) {
   await loadJobs();
 }
 
+async function renameTrack(jobId) {
+  const current = jobs.find((job) => job.id === jobId);
+  if (!current) {
+    return;
+  }
+  const nextTitle = window.prompt("Rename this track:", current.title);
+  if (nextTitle === null) {
+    return;
+  }
+  if (!nextTitle.trim()) {
+    window.alert("Track title cannot be empty.");
+    return;
+  }
+  await patchJob(jobId, { title: nextTitle.trim() });
+  await refreshJobsKeepingSelection();
+  if (selectedJobId === jobId) {
+    syncSelectedJob();
+  }
+}
+
+async function toggleFavorite(jobId) {
+  const current = jobs.find((job) => job.id === jobId);
+  if (!current) {
+    return;
+  }
+  await patchJob(jobId, { favorite: !current.favorite });
+  await refreshJobsKeepingSelection();
+}
+
+async function removeTrack(jobId) {
+  const current = jobs.find((job) => job.id === jobId);
+  if (!current) {
+    return;
+  }
+  const confirmed = window.confirm(`Delete "${current.title}" and its generated audio?`);
+  if (!confirmed) {
+    return;
+  }
+  await deleteJob(jobId);
+  if (selectedJobId === jobId) {
+    selectedJobId = null;
+  }
+  await refreshJobsKeepingSelection();
+}
+
+async function queueReprocess(jobId) {
+  const select = jobList.querySelector(`.reprocess-voice-select[data-job-id="${jobId}"]`);
+  const voice = select?.value;
+  if (!voice) {
+    window.alert("Choose a voice first.");
+    return;
+  }
+  await reprocessJob(jobId, voice);
+  await refreshJobsKeepingSelection();
+}
+
+async function resumeTrackedJob(jobId) {
+  await resumeJob(jobId);
+  await refreshJobsKeepingSelection();
+}
+
 function clearForm() {
   titleInput.value = "";
   textInput.value = "";
@@ -549,6 +1084,10 @@ function handleDrop(event) {
   dataTransfer.items.add(file);
   fileInput.files = dataTransfer.files;
   updateSelectedFileLabel();
+}
+
+function openFilePicker() {
+  fileInput.click();
 }
 
 playButton.addEventListener("click", async () => {
@@ -632,8 +1171,59 @@ transcriptViewer.addEventListener("click", (event) => {
   }
 });
 
+sectionNav.addEventListener("click", (event) => {
+  const target = event.target.closest(".section-chip");
+  if (!target) {
+    return;
+  }
+  jumpToSection(Number(target.dataset.sectionIndex));
+});
+
+jobList.addEventListener("click", async (event) => {
+  const target = event.target.closest("button[data-action]");
+  if (!target) {
+    return;
+  }
+
+  const { action, jobId } = target.dataset;
+  if (!jobId || !action) {
+    return;
+  }
+
+  try {
+    if (action === "listen") {
+      await selectJob(jobId);
+      return;
+    }
+    if (action === "favorite") {
+      await toggleFavorite(jobId);
+      return;
+    }
+    if (action === "resume") {
+      await resumeTrackedJob(jobId);
+      return;
+    }
+    if (action === "rename") {
+      await renameTrack(jobId);
+      return;
+    }
+    if (action === "delete") {
+      await removeTrack(jobId);
+      return;
+    }
+    if (action === "reprocess") {
+      await queueReprocess(jobId);
+    }
+  } catch (error) {
+    window.alert(error.message || "Something went wrong while updating the library.");
+  }
+});
+
 fileInput.addEventListener("change", updateSelectedFileLabel);
 voiceSelect.addEventListener("change", updateVoiceDescription);
+librarySearchInput.addEventListener("input", renderJobs);
+libraryFilterSelect.addEventListener("change", renderJobs);
+librarySortSelect.addEventListener("change", renderJobs);
 form.addEventListener("submit", submitJob);
 clearButton.addEventListener("click", clearForm);
 syncOffsetInput.addEventListener("input", () => {
@@ -691,12 +1281,29 @@ clearCalibrationButton.addEventListener("click", () => {
 });
 
 dropzone.addEventListener("drop", handleDrop);
+dropzone.addEventListener("click", (event) => {
+  if (event.target === fileInput) {
+    return;
+  }
+  event.preventDefault();
+  openFilePicker();
+});
+dropzone.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") {
+    return;
+  }
+  event.preventDefault();
+  openFilePicker();
+});
 
 async function init() {
+  renderSystemStatus();
   await loadVoices();
   updateSelectedFileLabel();
   await loadJobs();
+  await loadSystemStatus();
   setInterval(loadJobs, 1500);
+  setInterval(loadSystemStatus, 3000);
 }
 
 init();

@@ -42,7 +42,7 @@
           </label>
         </div>
         <p id="voice-description" class="voice-description">
-          Most natural voices use online neural synthesis. Local Piper voices remain available offline.
+          Most natural voices use online neural synthesis. Local Kokoro premium voices and Piper fallback voices remain available offline.
         </p>
 
         <form id="tts-form" class="intake-form">
@@ -71,15 +71,92 @@
             <button type="button" id="clear-button" class="ghost-button">Clear</button>
           </div>
         </form>
+
+        <section class="queue-panel">
+          <div class="queue-panel-header">
+            <div>
+              <p class="track-label">Active Queue</p>
+              <h3 id="queue-panel-title">No jobs running</h3>
+            </div>
+            <span id="queue-panel-count" class="queue-panel-count">0 active</span>
+          </div>
+          <div id="active-job-list" class="active-job-list">
+            <div class="empty-state">Queued and processing tracks will appear here while they work.</div>
+          </div>
+        </section>
+
+        <section class="system-panel">
+          <div class="queue-panel-header system-panel-header">
+            <div>
+              <p class="track-label">System Load</p>
+              <h3 id="system-panel-title">Waiting for local metrics</h3>
+            </div>
+            <span id="system-panel-updated" class="queue-panel-count">Not loaded</span>
+          </div>
+          <div class="system-grid">
+            <article class="system-card">
+              <div class="system-card-topline">
+                <strong>CPU</strong>
+                <span id="cpu-busy-pill" class="system-pill">--</span>
+              </div>
+              <p id="cpu-summary" class="job-meta">CPU stats unavailable right now.</p>
+              <div class="system-meter" aria-hidden="true">
+                <span id="cpu-meter-fill" style="width:0%"></span>
+              </div>
+              <p id="cpu-breakdown" class="system-breakdown">User -- • System -- • Wait --</p>
+            </article>
+            <article class="system-card">
+              <div class="system-card-topline">
+                <strong>GPU</strong>
+                <span id="gpu-busy-pill" class="system-pill">--</span>
+              </div>
+              <p id="gpu-summary" class="job-meta">GPU stats unavailable right now.</p>
+              <div class="system-meter" aria-hidden="true">
+                <span id="gpu-meter-fill" style="width:0%"></span>
+              </div>
+              <p id="gpu-breakdown" class="system-breakdown">VRAM -- • Temp --</p>
+            </article>
+          </div>
+        </section>
       </section>
 
       <aside class="panel jobs-panel">
         <div class="panel-header library-header">
           <div>
             <h2>Your Library</h2>
-            <p>Completed tracks stay here between sessions.</p>
+            <p>Completed tracks stay here between sessions and can be managed like saved projects.</p>
           </div>
           <p id="job-count">0 jobs</p>
+        </div>
+        <div class="library-toolbar">
+          <label class="library-search">
+            <span>Search</span>
+            <input id="library-search" type="search" placeholder="Find a track, filename, or preview text" />
+          </label>
+          <div class="library-toolbar-row">
+            <label class="library-filter">
+              <span>Show</span>
+              <select id="library-filter">
+                <option value="all">All tracks</option>
+                <option value="favorites">Favorites</option>
+                <option value="recent">Recent</option>
+                <option value="paste">Pasted text</option>
+                <option value="pdf">PDF</option>
+                <option value="epub">EPUB</option>
+                <option value="txt">Text files</option>
+              </select>
+            </label>
+            <label class="library-filter">
+              <span>Sort</span>
+              <select id="library-sort">
+                <option value="smart">Favorites, recent, newest</option>
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="title">Title A-Z</option>
+                <option value="length">Longest first</option>
+              </select>
+            </label>
+          </div>
         </div>
         <div class="library-scroll">
           <div id="job-list" class="job-list">
@@ -128,6 +205,15 @@
           </div>
           <p id="reader-mode" class="reader-mode">Waiting for a completed track</p>
         </div>
+        <div class="section-panel">
+          <div class="section-panel-header">
+            <p class="track-label">Sections</p>
+            <span id="section-count" class="section-count">No sections yet</span>
+          </div>
+          <div id="section-nav" class="section-nav">
+            <p class="transcript-empty">Load a completed track to browse chapters or pages.</p>
+          </div>
+        </div>
         <div class="reader-controls">
           <div class="sync-grid">
             <label class="sync-control">
@@ -156,7 +242,8 @@
             <div class="sync-button-group">
               <button type="button" id="calibrate-start" class="ghost-button compact-button">Set Start Point</button>
               <button type="button" id="calibrate-end" class="ghost-button compact-button">Set End Point</button>
-              <button type="button" id="clear-calibration" class="ghost-button compact-button secondary-button">Clear Points</button>
+              <button type="button" id="clear-calibration" class="ghost-button compact-button secondary-button">Clear
+                Points</button>
             </div>
             <label class="follow-toggle">
               <input id="follow-playback" type="checkbox" checked />
