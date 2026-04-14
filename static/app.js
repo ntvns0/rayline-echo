@@ -28,12 +28,12 @@ const gpuBreakdown = document.getElementById("gpu-breakdown");
 
 const audioElement = document.getElementById("audio-element");
 const playButton = document.getElementById("play-button");
-const pauseButton = document.getElementById("pause-button");
 const backButton = document.getElementById("back-button");
 const forwardButton = document.getElementById("forward-button");
 const timeline = document.getElementById("timeline");
 const currentTimeEl = document.getElementById("current-time");
 const durationTimeEl = document.getElementById("duration-time");
+const playerPanel = document.getElementById("player-panel");
 const trackTitle = document.getElementById("track-title");
 const trackVoice = document.getElementById("track-voice");
 const playerSubtitle = document.getElementById("player-subtitle");
@@ -52,6 +52,7 @@ const driftLessButton = document.getElementById("drift-less");
 const driftMoreButton = document.getElementById("drift-more");
 const syncResetButton = document.getElementById("sync-reset");
 const followPlaybackInput = document.getElementById("follow-playback");
+const followToggleLabel = document.getElementById("follow-toggle-label");
 const calibrateStartButton = document.getElementById("calibrate-start");
 const calibrateEndButton = document.getElementById("calibrate-end");
 const clearCalibrationButton = document.getElementById("clear-calibration");
@@ -74,6 +75,53 @@ let calibrationPoints = {
   end: null,
 };
 let systemStatus = null;
+
+function scrollElementIntoContainerView(container, element, { center = false, smooth = false } = {}) {
+  if (!container || !element) {
+    return;
+  }
+  const containerRect = container.getBoundingClientRect();
+  const elementRect = element.getBoundingClientRect();
+  const offsetTop = elementRect.top - containerRect.top + container.scrollTop;
+  const offsetBottom = offsetTop + elementRect.height;
+  const padding = center ? container.clientHeight * 0.32 : 18;
+
+  let nextScrollTop = null;
+  if (center) {
+    nextScrollTop = offsetTop - ((container.clientHeight - elementRect.height) / 2);
+  } else if (offsetTop < container.scrollTop + padding) {
+    nextScrollTop = offsetTop - padding;
+  } else if (offsetBottom > container.scrollTop + container.clientHeight - padding) {
+    nextScrollTop = offsetBottom - container.clientHeight + padding;
+  }
+
+  if (nextScrollTop === null) {
+    return;
+  }
+
+  container.scrollTo({
+    top: Math.max(0, nextScrollTop),
+    behavior: smooth ? "smooth" : "auto",
+  });
+}
+
+function updatePlayerDockState() {
+  const hasAudio = Boolean(audioElement.getAttribute("src"));
+  const isPlaying = hasAudio && !audioElement.paused;
+  playerPanel.classList.toggle("is-idle", !hasAudio);
+  playerPanel.classList.toggle("is-ready", hasAudio && !isPlaying);
+  playerPanel.classList.toggle("is-playing", isPlaying);
+  playButton.disabled = !hasAudio;
+  backButton.disabled = !hasAudio;
+  forwardButton.disabled = !hasAudio;
+  timeline.disabled = !hasAudio;
+  playButton.textContent = isPlaying ? "Pause" : "Play";
+  playButton.setAttribute("aria-label", isPlaying ? "Pause" : "Play");
+}
+
+function updateFollowToggleState() {
+  followToggleLabel.classList.toggle("is-active", followPlaybackInput.checked);
+}
 
 function transcriptSettingsKey(jobId) {
   return `tts-sync-settings:${jobId}`;
@@ -550,7 +598,14 @@ function renderJobs() {
       <div class="job-management">
         <div class="job-primary-actions">
           <button type="button" class="library-button ${showResume ? "action-resume" : "action-listen"} ${job.id === selectedJobId ? "is-selected-action" : ""}" data-action="${showResume ? "resume" : "listen"}" data-job-id="${job.id}" ${canPlay || showResume ? "" : "disabled"}>${showResume ? "Resume" : job.id === selectedJobId ? "Current" : "Listen"}</button>
-          <button type="button" class="library-button action-favorite" data-action="favorite" data-job-id="${job.id}">${job.favorite ? "Unfavorite" : "Favorite"}</button>
+          <button
+            type="button"
+            class="library-button action-favorite"
+            data-action="favorite"
+            data-job-id="${job.id}"
+            aria-label="${job.favorite ? "Unfavorite this title" : "Favorite this title"}"
+            title="${job.favorite ? "Unfavorite" : "Favorite"}"
+          >${job.favorite ? "♡" : "♥︎"}</button>
           <button type="button" class="library-button action-rename" data-action="rename" data-job-id="${job.id}">Rename</button>
         </div>
         <div class="job-actions job-actions-secondary">
@@ -706,12 +761,12 @@ function jumpToSection(index) {
     audioElement.currentTime = Math.max(0, section.start_time);
   }
 
-  if (Number.isFinite(section.char_start)) {
+    if (Number.isFinite(section.char_start)) {
     const targetWord = transcriptData?.words?.find((word) => word.char_start >= section.char_start);
     if (targetWord) {
       const wordElement = transcriptViewer.querySelector(`[data-word-index="${transcriptData.words.indexOf(targetWord)}"]`);
       if (wordElement) {
-        wordElement.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+        scrollElementIntoContainerView(transcriptViewer, wordElement, { center: true, smooth: true });
       }
     }
   }
@@ -741,7 +796,7 @@ function setActiveWord(index) {
   }
   next.classList.add("is-active");
   if (!audioElement.paused && followPlaybackInput.checked) {
-    next.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+    scrollElementIntoContainerView(transcriptViewer, next, { center: true, smooth: true });
   }
 }
 
@@ -808,10 +863,12 @@ async function loadTranscript(job) {
 
 function syncSelectedJob() {
   if (!selectedJobId) {
+    updatePlayerDockState();
     return;
   }
   const current = jobs.find((job) => job.id === selectedJobId);
   if (!current || current.state !== "completed") {
+    updatePlayerDockState();
     return;
   }
   if (audioElement.src !== new URL(current.audio_url, window.location.origin).href) {
@@ -828,6 +885,7 @@ function syncSelectedJob() {
   pendingCalibrationPoint = null;
   updateCalibrationStatus();
   loadTranscript(current);
+  updatePlayerDockState();
 }
 
 async function selectJob(jobId) {
@@ -925,6 +983,7 @@ async function refreshJobsKeepingSelection() {
     transcriptViewer.innerHTML = `<p class="transcript-empty">Choose a completed title to follow along as it plays.</p>`;
     sectionCount.textContent = "No sections yet";
     sectionNav.innerHTML = `<p class="transcript-empty">Chapter or section markers will appear here when available.</p>`;
+    updatePlayerDockState();
   }
 }
 
@@ -1094,10 +1153,10 @@ playButton.addEventListener("click", async () => {
   if (!audioElement.src) {
     return;
   }
-  await audioElement.play();
-});
-
-pauseButton.addEventListener("click", () => {
+  if (audioElement.paused) {
+    await audioElement.play();
+    return;
+  }
   audioElement.pause();
 });
 
@@ -1130,11 +1189,16 @@ audioElement.addEventListener("timeupdate", () => {
 audioElement.addEventListener("loadedmetadata", () => {
   durationTimeEl.textContent = formatTime(audioElement.duration);
   updateTranscriptForCurrentTime(audioElement.currentTime);
+  updatePlayerDockState();
 });
 
 audioElement.addEventListener("seeked", () => {
   updateTranscriptForCurrentTime(audioElement.currentTime);
 });
+
+audioElement.addEventListener("play", updatePlayerDockState);
+audioElement.addEventListener("pause", updatePlayerDockState);
+audioElement.addEventListener("ended", updatePlayerDockState);
 
 transcriptViewer.addEventListener("click", (event) => {
   const target = event.target.closest(".transcript-word");
@@ -1224,6 +1288,7 @@ voiceSelect.addEventListener("change", updateVoiceDescription);
 librarySearchInput.addEventListener("input", renderJobs);
 libraryFilterSelect.addEventListener("change", renderJobs);
 librarySortSelect.addEventListener("change", renderJobs);
+followPlaybackInput.addEventListener("change", updateFollowToggleState);
 form.addEventListener("submit", submitJob);
 clearButton.addEventListener("click", clearForm);
 syncOffsetInput.addEventListener("input", () => {
@@ -1297,6 +1362,8 @@ dropzone.addEventListener("keydown", (event) => {
 });
 
 async function init() {
+  updatePlayerDockState();
+  updateFollowToggleState();
   renderSystemStatus();
   await loadVoices();
   updateSelectedFileLabel();

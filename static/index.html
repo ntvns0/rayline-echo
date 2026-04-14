@@ -18,40 +18,44 @@
 
 <body>
   <main class="shell">
-    <section class="hero">
-      <div class="brand-lockup" aria-label="Rayline">
-        <img
-          class="brand-logo-image"
-          src="/static/branding/rayline_echo.png"
-          alt="Rayline Echo logo"
-          width="2120"
-          height="742" />
+    <section class="top-layout">
+      <div class="brand-row">
+        <div class="brand-lockup" aria-label="Rayline">
+          <img
+            class="brand-logo-image"
+            src="/static/branding/rayline_echo.png"
+            alt="Rayline Echo logo"
+            width="2120"
+            height="742" />
+        </div>
       </div>
-      <p class="eyebrow">Rayline Echo</p>
-      <h1>Turn anything into an audiobook.</h1>
-      <p class="lede">
-        Rayline Echo turns books, documents, papers, and notes into a private, listenable library
-        you can build over time.
-      </p>
-      <p class="lede">
-        Import PDFs, EPUBs, Markdown, text files, and scanned documents. Process locally, queue
-        long jobs, and keep listening where you left off.
-      </p>
-      <div class="hero-product">
-        <span class="suite-tag">Rayline Suite</span>
-        <span class="product-pill">Echo</span>
-      </div>
-      <div class="credit-banner">
-        <p><strong>Created by Nate Evans</strong> with implementation assistance from OpenAI Codex.</p>
-        <p>
-          Free for personal and non-commercial use. Commercial use requires permission
-          and a one-time paid license.
-        </p>
-      </div>
-    </section>
 
-    <section class="workspace">
-      <section class="panel intake-panel">
+      <div class="top-content">
+        <section class="hero">
+        <p class="eyebrow">Rayline Echo</p>
+        <h1>Turn anything into an audiobook.</h1>
+        <p class="lede">
+          Rayline Echo turns books, documents, papers, and notes into a private, listenable library
+          you can build over time.
+        </p>
+        <p class="lede">
+          Import PDFs, EPUBs, Markdown, text files, and scanned documents. Process locally, queue
+          long jobs, and keep listening where you left off.
+        </p>
+        <div class="hero-product">
+          <span class="suite-tag">Rayline Suite</span>
+          <span class="product-pill">Echo</span>
+        </div>
+        <div class="credit-banner">
+          <p><strong>Created by Nate Evans</strong> with implementation assistance from OpenAI Codex.</p>
+          <p>
+            Free for personal and non-commercial use. Commercial use requires permission
+            and a one-time paid license.
+          </p>
+        </div>
+        </section>
+
+        <section class="panel intake-panel">
         <div class="panel-header">
           <h2>Add To Library</h2>
           <label class="voice-picker">
@@ -136,8 +140,11 @@
             </article>
           </div>
         </section>
-      </section>
+        </section>
+      </div>
+    </section>
 
+    <section class="workspace">
       <aside class="panel jobs-panel">
         <div class="panel-header library-header">
           <div>
@@ -184,41 +191,17 @@
       </aside>
     </section>
 
-    <section class="panel player-panel">
+    <section class="panel reader-panel">
       <div class="panel-header">
         <div>
-          <h2>Now Listening</h2>
-          <p id="player-subtitle">Choose something from your library to start listening.</p>
-        </div>
-        <a id="download-link" class="ghost-link hidden" href="#">Download WAV</a>
-      </div>
-
-      <div class="player-card">
-        <div class="player-topbar">
-          <div class="track-meta">
-            <p class="track-label">Current Title</p>
-            <h3 id="track-title">Nothing selected</h3>
-            <p id="track-voice" class="track-voice">No voice selected</p>
-          </div>
-          <div class="transport-controls">
-            <button type="button" id="back-button" class="transport-button">-5s</button>
-            <button type="button" id="play-button" class="play-button">Play</button>
-            <button type="button" id="pause-button" class="transport-button">Pause</button>
-            <button type="button" id="forward-button" class="transport-button">+5s</button>
-          </div>
-        </div>
-
-        <div class="timeline-wrap">
-          <span id="current-time">0:00</span>
-          <input id="timeline" type="range" min="0" max="100" value="0" step="0.1" />
-          <span id="duration-time">0:00</span>
+          <h2>Read Along</h2>
+          <p>Follow the current title with synced highlighting and calibration controls.</p>
         </div>
       </div>
-
       <div class="reader-card">
         <div class="reader-header">
           <div>
-            <p class="track-label">Read Along</p>
+            <p class="track-label">Reading View</p>
             <h3>Synced Reading View</h3>
           </div>
           <p id="reader-mode" class="reader-mode">Waiting for a completed title</p>
@@ -263,7 +246,7 @@
               <button type="button" id="clear-calibration" class="ghost-button compact-button secondary-button">Clear
                 Points</button>
             </div>
-            <label class="follow-toggle">
+            <label id="follow-toggle-label" class="follow-toggle is-active">
               <input id="follow-playback" type="checkbox" checked />
               <span>Auto-follow while playing</span>
             </label>
@@ -279,8 +262,6 @@
           <p class="transcript-empty">Choose a completed title to follow along as it plays.</p>
         </div>
       </div>
-
-      <audio id="audio-element" preload="metadata"></audio>
     </section>
 
     <section class="panel ownership-panel">
@@ -301,6 +282,36 @@
           to arrange a one-time paid license.
         </p>
       </div>
+    </section>
+
+    <section id="player-panel" class="player-panel is-idle" aria-label="Now Listening">
+      <div class="player-dock">
+        <div class="player-identity">
+          <div class="track-meta">
+            <p class="track-label">Now Listening</p>
+            <h3 id="track-title">Nothing selected</h3>
+            <p id="track-voice" class="track-voice">No voice selected</p>
+            <p id="player-subtitle" class="player-subtitle">Choose something from your library to start listening.</p>
+          </div>
+        </div>
+        <div class="player-transport-area">
+          <div class="transport-controls">
+            <button type="button" id="back-button" class="transport-button" aria-label="Go back 5 seconds">↺ 5s</button>
+            <button type="button" id="play-button" class="play-button" aria-label="Play">Play</button>
+            <button type="button" id="forward-button" class="transport-button" aria-label="Skip ahead 5 seconds">5s ↻</button>
+          </div>
+
+          <div class="timeline-wrap">
+            <span id="current-time">0:00</span>
+            <input id="timeline" type="range" min="0" max="100" value="0" step="0.1" />
+            <span id="duration-time">0:00</span>
+          </div>
+        </div>
+        <div class="player-dock-actions">
+          <a id="download-link" class="ghost-link hidden" href="#">Download WAV</a>
+        </div>
+      </div>
+      <audio id="audio-element" preload="metadata"></audio>
     </section>
   </main>
 
