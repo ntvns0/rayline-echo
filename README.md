@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="static/branding/rayline_echo.png" alt="Rayline Echo" width="720">
+  <img src="static/branding/rayline_echo_wide.png" alt="Rayline Echo" width="900">
 </p>
 
 # Rayline Echo
@@ -94,6 +94,49 @@ To make it available on your local network:
 python3 -m uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
+## Desktop App Preview
+
+Rayline Echo is beginning its transition toward a true desktop app experience on macOS, Linux, and Windows.
+
+The first step is a native launcher that opens the app in its own window instead of requiring users to manually open a browser tab:
+
+```bash
+python3 -m pip install -r requirements.txt
+python3 desktop_app.py
+```
+
+This is an early packaging foundation, not the final one-click installer yet. The goal is still for users to download Rayline Echo, click its icon, and run it with the same basic experience across platforms. The desktop launcher now runs the app server in a separate process so playback, queue work, and the native window are less likely to interfere with one another.
+
+## Build Desktop Bundles
+
+Rayline Echo now includes an early PyInstaller-based desktop build path.
+
+Install the packaging requirements:
+
+```bash
+python3 -m pip install -r requirements-packaging.txt
+```
+
+Then build a desktop bundle for your current platform:
+
+```bash
+python3 build_desktop.py
+```
+
+What this currently does:
+
+- packages the local app into a native desktop bundle
+- includes the static web UI assets
+- uses the Rayline Echo branding for the app icon where supported
+
+Current direction:
+
+- macOS: native app bundle via PyInstaller
+- Windows: native executable bundle via PyInstaller
+- Linux: desktop bundle now, AppImage or distro package next
+
+This is not the final installer flow yet, but it is the first real step toward consistent cross-platform releases.
+
 ## Setup Notes
 
 - Uploaded files must be under 5 MB
@@ -114,6 +157,20 @@ Rayline Echo is built to keep your reading and listening workflow close to your 
 - Cloud voice options are optional, not required
 
 If you prefer a fully local workflow, you can stay on local voices and avoid cloud-backed synthesis entirely.
+
+## Packaging Direction
+
+The current packaging direction is:
+
+- remove shell-level dependencies that are awkward to bundle
+- provide a native desktop window for the local app
+- build downloadable installers for macOS, Linux, and Windows from the same codebase
+
+Groundwork already underway:
+
+- PDF OCR rendering is moving away from external `pdftoppm` calls toward a Python-bundlable renderer
+- a `pywebview` desktop launcher has been added as the first native app shell
+- a `PyInstaller` build script has been added for early desktop bundles
 
 ## Monitoring
 

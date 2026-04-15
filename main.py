@@ -6,6 +6,7 @@ import json
 import queue
 import re
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -27,20 +28,32 @@ from fastapi.staticfiles import StaticFiles
 from kokoro_onnx import Kokoro
 from piper import PiperVoice
 from piper.download_voices import download_voice
+from platformdirs import user_data_dir
 from pypdf import PdfReader
+try:
+    import pypdfium2 as pdfium
+except ImportError:  # pragma: no cover - optional until desktop dependencies are installed
+    pdfium = None
 from rapidocr_onnxruntime import RapidOCR
 from monitor import get_cpu_snapshot, get_gpu_snapshot
 
-
+APP_NAME = "Rayline Echo"
+APP_AUTHOR = "Rayline"
 BASE_DIR = Path(__file__).resolve().parent
-STATIC_DIR = BASE_DIR / "static"
-DATA_DIR = BASE_DIR / "data"
+RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", BASE_DIR))
+STATIC_DIR = RESOURCE_DIR / "static"
+if getattr(sys, "frozen", False):
+    APP_STATE_DIR = Path(user_data_dir(APP_NAME, APP_AUTHOR))
+    DATA_DIR = APP_STATE_DIR / "data"
+    MODELS_DIR = APP_STATE_DIR / "models"
+else:
+    DATA_DIR = BASE_DIR / "data"
+    MODELS_DIR = BASE_DIR / "models"
 UPLOADS_DIR = DATA_DIR / "uploads"
 AUDIO_DIR = DATA_DIR / "audio"
 TRANSCRIPTS_DIR = DATA_DIR / "transcripts"
 JOBS_DIR = DATA_DIR / "jobs"
 CHECKPOINTS_DIR = DATA_DIR / "checkpoints"
-MODELS_DIR = BASE_DIR / "models"
 KOKORO_DIR = MODELS_DIR / "kokoro"
 MAX_FILE_SIZE = 5 * 1024 * 1024
 CHUNK_LIMIT = 350
@@ -79,6 +92,34 @@ VOICE_CATALOG: dict[str, dict[str, str]] = {
         "voice_name": "en-US-BrianMultilingualNeural",
         "label": "Brian Multilingual Neural",
         "description": "Natural conversational male voice",
+        "format": "mp3",
+    },
+    "edge:en-GB-SoniaNeural": {
+        "provider": "edge",
+        "voice_name": "en-GB-SoniaNeural",
+        "label": "Sonia Neural",
+        "description": "Refined UK English female voice",
+        "format": "mp3",
+    },
+    "edge:en-GB-RyanNeural": {
+        "provider": "edge",
+        "voice_name": "en-GB-RyanNeural",
+        "label": "Ryan Neural",
+        "description": "Refined UK English male voice",
+        "format": "mp3",
+    },
+    "edge:en-AU-NatashaNeural": {
+        "provider": "edge",
+        "voice_name": "en-AU-NatashaNeural",
+        "label": "Natasha Neural",
+        "description": "Natural Australian female voice",
+        "format": "mp3",
+    },
+    "edge:en-AU-WilliamNeural": {
+        "provider": "edge",
+        "voice_name": "en-AU-WilliamNeural",
+        "label": "William Neural",
+        "description": "Natural Australian male voice",
         "format": "mp3",
     },
     "kokoro:af_sky": {
@@ -578,40 +619,47 @@ def extract_pdf_sections(content: bytes) -> list[dict[str, str]]:
 
 
 def extract_pdf_sections_with_ocr(content: bytes) -> list[dict[str, str]]:
+    if pdfium is None:
+        raise HTTPException(
+            status_code=500,
+            detail="PDF OCR rendering support is not installed yet. Install dependencies from requirements.txt.",
+        )
     ocr = get_ocr_engine()
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_dir_path = Path(temp_dir)
-        pdf_path = temp_dir_path / "upload.pdf"
-        pdf_path.write_bytes(content)
-        image_prefix = temp_dir_path / "page"
+    page_texts: list[dict[str, str]] = []
+    try:
+        document = pdfium.PdfDocument(content)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Unable to open this PDF for OCR.") from exc
 
-        try:
-            subprocess.run(
-                ["pdftoppm", "-png", str(pdf_path), str(image_prefix)],
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-        except subprocess.CalledProcessError as exc:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Unable to render this PDF for OCR: {exc.stderr.strip()}",
-            ) from exc
+    try:
+        for page_index in range(len(document)):
+            page = document[page_index]
+            bitmap = None
+            try:
+                bitmap = page.render(scale=2.0)
+                image = bitmap.to_numpy()
+            except Exception as exc:
+                raise HTTPException(status_code=400, detail="Unable to render this PDF for OCR.") from exc
+            finally:
+                if bitmap is not None and hasattr(bitmap, "close"):
+                    bitmap.close()
+                if hasattr(page, "close"):
+                    page.close()
 
-        page_texts: list[dict[str, str]] = []
-        for page_index, image_path in enumerate(sorted(temp_dir_path.glob("page-*.png")), start=1):
-            result, _ = ocr(str(image_path))
+            result, _ = ocr(image)
             if not result:
                 continue
             page_lines = [item[1].strip() for item in result if len(item) > 1 and item[1].strip()]
             if page_lines:
                 page_texts.append(
                     {
-                        "title": page_lines[0][:80] or f"Page {page_index}",
+                        "title": page_lines[0][:80] or f"Page {page_index + 1}",
                         "text": "\n".join(page_lines),
                     }
                 )
+    finally:
+        if hasattr(document, "close"):
+            document.close()
 
     return page_texts
 

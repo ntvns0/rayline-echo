@@ -23,14 +23,14 @@
         <div class="brand-lockup" aria-label="Rayline">
           <img
             class="brand-logo-image"
-            src="/static/branding/rayline_echo.png"
+            src="/static/branding/rayline_echo_wide.png"
             alt="Rayline Echo logo"
-            width="2120"
-            height="742" />
+            width="3000"
+            height="740" />
         </div>
       </div>
 
-      <div class="top-content">
+      <div class="top-hero-row">
         <section class="hero">
         <p class="eyebrow">Rayline Echo</p>
         <h1>Turn anything into an audiobook.</h1>
@@ -55,6 +55,40 @@
         </div>
         </section>
 
+        <section class="panel demo-panel" aria-label="Product demo">
+          <div class="panel-header demo-header">
+            <div>
+              <h2>Quick Demo</h2>
+              <p>Hear the product promise in a few different voices and follow along as it reads.</p>
+            </div>
+          </div>
+          <div class="demo-controls">
+            <label class="voice-picker demo-voice-picker">
+              <span>Demo voice</span>
+              <select id="demo-voice-select"></select>
+            </label>
+            <button type="button" id="demo-play-button" class="primary-button demo-play-button">Play demo</button>
+          </div>
+          <div class="demo-tabs">
+            <div class="demo-tab-list" role="tablist" aria-label="About Rayline Echo">
+              <button type="button" class="demo-tab is-active" data-demo-tab="about" role="tab" aria-selected="true">About</button>
+              <button type="button" class="demo-tab" data-demo-tab="how" role="tab" aria-selected="false">How To Use</button>
+              <button type="button" class="demo-tab" data-demo-tab="ideas" role="tab" aria-selected="false">Ideas</button>
+            </div>
+          </div>
+          <div class="demo-readalong-card">
+            <div class="demo-readalong-topline">
+              <p class="track-label">Read Along</p>
+              <span id="demo-status" class="demo-status-pill">Ready</span>
+            </div>
+            <div id="demo-readalong" class="demo-readalong">
+              <p class="transcript-empty">The demo transcript will appear here.</p>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="top-content">
         <section class="panel intake-panel">
         <div class="panel-header">
           <h2>Add To Library</h2>
@@ -139,7 +173,6 @@
               <p id="gpu-breakdown" class="system-breakdown">VRAM -- • Temp --</p>
             </article>
           </div>
-        </section>
         </section>
       </div>
     </section>

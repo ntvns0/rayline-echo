@@ -25,6 +25,11 @@ const gpuBusyPill = document.getElementById("gpu-busy-pill");
 const gpuSummary = document.getElementById("gpu-summary");
 const gpuMeterFill = document.getElementById("gpu-meter-fill");
 const gpuBreakdown = document.getElementById("gpu-breakdown");
+const demoVoiceSelect = document.getElementById("demo-voice-select");
+const demoPlayButton = document.getElementById("demo-play-button");
+const demoReadalong = document.getElementById("demo-readalong");
+const demoStatus = document.getElementById("demo-status");
+const demoTabs = Array.from(document.querySelectorAll(".demo-tab"));
 
 const audioElement = document.getElementById("audio-element");
 const playButton = document.getElementById("play-button");
@@ -75,6 +80,17 @@ let calibrationPoints = {
   end: null,
 };
 let systemStatus = null;
+const DEMO_TEXTS = {
+  about: "Turn anything into an audiobook. Rayline Echo turns books, documents, papers, and notes into a private, listenable library you can build over time. Import PDFs, EPUBs, Markdown, text files, and scanned documents. Process locally, queue long jobs, and keep listening where you left off.",
+  how: "Drop in a file or paste text, choose a voice, and add it to your library. Rayline Echo prepares it in the background, keeps your progress between sessions, and lets you return later to listen and follow along without starting over.",
+  ideas: "Use Rayline Echo for bedtime stories, Yoto-style content planning, school reading support, family read-alongs, project notes, study packets, Project Gutenberg text and EPUB files, or written material you want to turn into something you can actually listen to.",
+};
+let demoWords = [];
+let demoWordMap = [];
+let demoVoices = [];
+let demoUtterance = null;
+let demoEstimatedTimers = [];
+let currentDemoTab = "about";
 
 function scrollElementIntoContainerView(container, element, { center = false, smooth = false } = {}) {
   if (!container || !element) {
@@ -117,6 +133,227 @@ function updatePlayerDockState() {
   timeline.disabled = !hasAudio;
   playButton.textContent = isPlaying ? "Pause" : "Play";
   playButton.setAttribute("aria-label", isPlaying ? "Pause" : "Play");
+}
+
+function clearDemoTimers() {
+  demoEstimatedTimers.forEach((timerId) => window.clearTimeout(timerId));
+  demoEstimatedTimers = [];
+}
+
+function setDemoStatus(label) {
+  demoStatus.textContent = label;
+}
+
+function getDemoText() {
+  return DEMO_TEXTS[currentDemoTab] || "";
+}
+
+function setActiveDemoWord(index) {
+  if (!demoWords.length) {
+    return;
+  }
+  demoWords.forEach((word, wordIndex) => {
+    word.classList.toggle("is-active", wordIndex === index);
+  });
+  const activeWord = demoWords[index];
+  if (activeWord) {
+    scrollElementIntoContainerView(demoReadalong, activeWord, { center: true, smooth: true });
+  }
+}
+
+function resetDemoReadalong() {
+  clearDemoTimers();
+  setActiveDemoWord(-1);
+}
+
+function buildDemoTranscript() {
+  const demoText = getDemoText();
+  demoReadalong.innerHTML = "";
+  demoWords = [];
+  demoWordMap = [];
+  const wordPattern = /\S+/g;
+  let cursor = 0;
+  let match;
+  while ((match = wordPattern.exec(demoText)) !== null) {
+    if (cursor < match.index) {
+      demoReadalong.append(document.createTextNode(demoText.slice(cursor, match.index)));
+    }
+    const span = document.createElement("span");
+    span.className = "demo-word";
+    span.textContent = match[0];
+    span.dataset.wordIndex = String(demoWords.length);
+    demoReadalong.append(span);
+    demoWords.push(span);
+    demoWordMap.push({ charStart: match.index, charEnd: match.index + match[0].length });
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < demoText.length) {
+    demoReadalong.append(document.createTextNode(demoText.slice(cursor)));
+  }
+  if (!demoWords.length) {
+    demoReadalong.innerHTML = `<p class="transcript-empty">Choose a demo topic to preview the voices.</p>`;
+  }
+}
+
+function selectDemoWordFromCharIndex(charIndex) {
+  if (!demoWordMap.length) {
+    return;
+  }
+  const nextIndex = demoWordMap.findIndex((word) => charIndex >= word.charStart && charIndex < word.charEnd);
+  if (nextIndex >= 0) {
+    setActiveDemoWord(nextIndex);
+  }
+}
+
+function estimateDemoTimings(utterance) {
+  resetDemoReadalong();
+  const wordsPerMinute = 170;
+  const msPerWord = 60000 / wordsPerMinute;
+  demoWordMap.forEach((_, index) => {
+    const timerId = window.setTimeout(() => {
+      setActiveDemoWord(index);
+    }, index * msPerWord);
+    demoEstimatedTimers.push(timerId);
+  });
+  const endTimer = window.setTimeout(() => {
+    demoUtterance = null;
+    demoPlayButton.textContent = "Play demo";
+    setDemoStatus("Ready");
+    resetDemoReadalong();
+  }, demoWordMap.length * msPerWord + 350);
+  demoEstimatedTimers.push(endTimer);
+}
+
+function populateDemoVoices() {
+  if (!("speechSynthesis" in window)) {
+    demoVoiceSelect.innerHTML = `<option value="">Browser voices unavailable</option>`;
+    demoVoiceSelect.disabled = true;
+    demoPlayButton.disabled = true;
+    setDemoStatus("Unavailable");
+    demoReadalong.innerHTML = `<p class="transcript-empty">This browser does not expose speech synthesis voices for the demo.</p>`;
+    return;
+  }
+
+  const available = window.speechSynthesis.getVoices()
+    .filter((voice) => /^en[-_]/i.test(voice.lang || "") || /english/i.test(voice.name))
+    .sort((left, right) => {
+      const localeOrder = { "en-AU": 0, "en-GB": 1, "en-US": 2 };
+      const leftLocale = localeOrder[(left.lang || "").slice(0, 5)] ?? 9;
+      const rightLocale = localeOrder[(right.lang || "").slice(0, 5)] ?? 9;
+      const localBoost = Number(Boolean(right.localService)) - Number(Boolean(left.localService));
+      return localBoost || leftLocale - rightLocale || left.name.localeCompare(right.name);
+    });
+
+  demoVoices = available.length ? available : window.speechSynthesis.getVoices();
+  demoVoiceSelect.innerHTML = "";
+  demoVoices.slice(0, 20).forEach((voice, index) => {
+    const option = document.createElement("option");
+    option.value = voice.voiceURI;
+    option.textContent = `${voice.name} • ${voice.lang}`;
+    if (index === 0) {
+      option.selected = true;
+    }
+    demoVoiceSelect.append(option);
+  });
+
+  demoVoiceSelect.disabled = demoVoices.length === 0;
+  demoPlayButton.disabled = demoVoices.length === 0;
+  if (!demoVoices.length) {
+    setDemoStatus("Unavailable");
+  }
+}
+
+function stopDemoPlayback({ keepStatus = false } = {}) {
+  clearDemoTimers();
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+  demoUtterance = null;
+  demoPlayButton.textContent = "Play demo";
+  if (!keepStatus) {
+    setDemoStatus("Ready");
+  }
+  resetDemoReadalong();
+}
+
+function playDemo() {
+  if (!("speechSynthesis" in window) || !demoVoices.length) {
+    return;
+  }
+  const demoText = getDemoText();
+  if (!demoText) {
+    setDemoStatus("Add text");
+    buildDemoTranscript();
+    return;
+  }
+
+  if (window.speechSynthesis.paused) {
+    window.speechSynthesis.resume();
+    demoPlayButton.textContent = "Pause demo";
+    setDemoStatus("Playing");
+    return;
+  }
+
+  if (window.speechSynthesis.speaking) {
+    window.speechSynthesis.pause();
+    demoPlayButton.textContent = "Resume demo";
+    setDemoStatus("Paused");
+    return;
+  }
+
+  stopDemoPlayback({ keepStatus: true });
+  buildDemoTranscript();
+  const utterance = new SpeechSynthesisUtterance(demoText);
+  const selectedVoice = demoVoices.find((voice) => voice.voiceURI === demoVoiceSelect.value) || demoVoices[0];
+  utterance.voice = selectedVoice;
+  utterance.lang = selectedVoice?.lang || "en-US";
+  utterance.rate = 0.96;
+  utterance.pitch = 1;
+
+  utterance.onstart = () => {
+    demoUtterance = utterance;
+    demoPlayButton.textContent = "Pause demo";
+    setDemoStatus("Playing");
+    resetDemoReadalong();
+  };
+  utterance.onboundary = (event) => {
+    if (typeof event.charIndex === "number") {
+      selectDemoWordFromCharIndex(event.charIndex);
+    }
+  };
+  utterance.onend = () => {
+    demoUtterance = null;
+    demoPlayButton.textContent = "Play demo";
+    setDemoStatus("Ready");
+    resetDemoReadalong();
+  };
+  utterance.onerror = () => {
+    demoUtterance = null;
+    demoPlayButton.textContent = "Play demo";
+    setDemoStatus("Voice error");
+    resetDemoReadalong();
+  };
+
+  const supportsBoundary = "onboundary" in utterance;
+  if (!supportsBoundary) {
+    estimateDemoTimings(utterance);
+  }
+
+  window.speechSynthesis.speak(utterance);
+}
+
+function switchDemoTab(tabName) {
+  currentDemoTab = tabName;
+  demoTabs.forEach((tab) => {
+    const isActive = tab.dataset.demoTab === tabName;
+    tab.classList.toggle("is-active", isActive);
+    tab.setAttribute("aria-selected", String(isActive));
+  });
+  if (DEMO_TEXTS[tabName]) {
+    stopDemoPlayback();
+    buildDemoTranscript();
+    setDemoStatus("Ready");
+  }
 }
 
 function updateFollowToggleState() {
@@ -1364,6 +1601,8 @@ dropzone.addEventListener("keydown", (event) => {
 async function init() {
   updatePlayerDockState();
   updateFollowToggleState();
+  buildDemoTranscript();
+  populateDemoVoices();
   renderSystemStatus();
   await loadVoices();
   updateSelectedFileLabel();
@@ -1374,3 +1613,17 @@ async function init() {
 }
 
 init();
+
+if ("speechSynthesis" in window) {
+  window.speechSynthesis.addEventListener?.("voiceschanged", populateDemoVoices);
+}
+
+demoPlayButton.addEventListener("click", playDemo);
+demoVoiceSelect.addEventListener("change", () => {
+  stopDemoPlayback();
+});
+demoTabs.forEach((tab) => {
+  tab.addEventListener("click", () => {
+    switchDemoTab(tab.dataset.demoTab);
+  });
+});

@@ -6,5 +6,7 @@ venv/
 
 data/
 models/
+build/
+dist/
 
 .DS_Store

@@ -48,6 +48,13 @@ body {
   justify-content: center;
 }
 
+.top-hero-row {
+  display: grid;
+  grid-template-columns: minmax(0, 0.96fr) minmax(320px, 0.84fr);
+  gap: 1.3rem;
+  align-items: start;
+}
+
 .top-content {
   display: grid;
   gap: 1.15rem;
@@ -71,7 +78,7 @@ body {
 
 .brand-lockup {
   display: block;
-  width: min(100%, 560px);
+  width: 100%;
   margin-bottom: 1rem;
   margin-inline: auto;
   border-radius: 22px;
@@ -271,6 +278,108 @@ body {
 
 .credit-banner p + p {
   margin-top: 0.45rem;
+}
+
+.demo-panel {
+  padding: 1.25rem;
+}
+
+.demo-header {
+  margin-bottom: 0.85rem;
+}
+
+.demo-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.8rem;
+  align-items: end;
+}
+
+.demo-voice-picker {
+  font-size: 0.88rem;
+}
+
+.demo-play-button {
+  min-width: 8.5rem;
+}
+
+.demo-readalong-card {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 22px;
+  border: 1px solid rgba(39, 45, 69, 0.08);
+  background: rgba(255, 255, 255, 0.76);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.demo-readalong-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.demo-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(85, 127, 255, 0.1);
+  color: var(--accent-deep);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.demo-readalong {
+  max-height: 165px;
+  overflow: auto;
+  padding: 0.85rem 0.95rem;
+  border-radius: 18px;
+  background: rgba(246, 248, 252, 0.96);
+  border: 1px solid rgba(39, 45, 69, 0.08);
+  font-family: "Source Serif 4", serif;
+  font-size: 1.05rem;
+  line-height: 1.85;
+  white-space: pre-wrap;
+}
+
+.demo-word {
+  border-radius: 0.35rem;
+  transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+
+.demo-word.is-active {
+  background: rgba(85, 127, 255, 0.16);
+  color: var(--accent-deep);
+  box-shadow: 0 0 0 1px rgba(85, 127, 255, 0.08);
+}
+
+.demo-tabs {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.8rem;
+}
+
+.demo-tab-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.demo-tab {
+  padding: 0.65rem 0.95rem;
+  border-radius: 999px;
+  background: rgba(23, 26, 40, 0.06);
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.demo-tab.is-active {
+  background: linear-gradient(135deg, rgba(85, 127, 255, 0.18), rgba(135, 168, 255, 0.18));
+  color: var(--accent-deep);
+  box-shadow: inset 0 0 0 1px rgba(85, 127, 255, 0.08);
 }
 
 .voice-picker {
@@ -1193,12 +1302,12 @@ button:hover,
 }
 
 @media (max-width: 920px) {
-  .workspace {
-    display: block;
+  .top-hero-row {
+    grid-template-columns: 1fr;
   }
 
-  .brand-lockup {
-    width: min(100%, 520px);
+  .workspace {
+    display: block;
   }
 
   .jobs-panel {
@@ -1248,6 +1357,10 @@ button:hover,
 
   .brand-logo-image {
     width: 100%;
+  }
+
+  .demo-controls {
+    grid-template-columns: 1fr;
   }
 
   .actions,
